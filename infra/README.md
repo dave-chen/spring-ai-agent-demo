@@ -28,4 +28,16 @@ If your AWS account restricts role creation, pass a pre-existing role ARN as a s
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name arn:aws:iam::970030241939:role/existing-agent-role
 ```
 
+If you created a new AWS CLI profile, run using that profile:
+
+```
+AWS_PROFILE=my-devel-profile AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
+
+Or, assume a role with STS and run the script (script requires `jq`):
+
+```
+ASSUME_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/my-deploy-role AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
+
 The stack outputs include `AgentArtifactsBucket`, `AgentQueueUrl`, `AgentLockTable`, and `AgentRoleArn`.
