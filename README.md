@@ -73,6 +73,7 @@ If you have a bucket or stack from a previous failed deploy, you can reuse the b
 
 - Reuse existing S3 bucket: `ALLOW_EXISTING_BUCKET=true` (useful when your prior attempt created a bucket that you want to keep).
 - Delete ROLLBACK_COMPLETE stack and retry: `DELETE_ROLLBACK_STACK=true` (be careful: this destroys the previous stack's resources).
+ - Reuse existing SQS queue: `ALLOW_EXISTING_QUEUE=true` (useful when you have an existing FIFO queue you want to reuse).
 - Example that reuses bucket and deletes the old stack to retry:
 
 ```

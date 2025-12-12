@@ -1,12 +1,7 @@
 # Agent Infra
 
 This folder contains a simple CloudFormation template `agent-infra.yml` to create:
-- An S3 bucket to store artifacts
-- SQS FIFO queue for job messages
-- DynamoDB table for locking
-- An IAM role for the agent runtime
-
-Prerequisites:
+ - Reuse existing SQS Queue: `ALLOW_EXISTING_QUEUE=true` (useful when you have an existing FIFO queue you want to reuse). Pass a queue name; the script will query it.
 - Install the AWS CLI v2 (see https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
 - Install cfn-lint to lint CloudFormation templates (optional): `python -m pip install --user cfn-lint`.
 
