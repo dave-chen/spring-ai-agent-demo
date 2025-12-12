@@ -48,4 +48,15 @@ Set the following repo secrets (or store in AWS Secrets Manager) before running 
 - `AGENT_APPROVERS` (comma-separated logins allowed to approve)
 - `AGENTCORE_RUNTIME_ID` and `AGENTCORE_ROLE_ARN`
 
+Triggering agent manually (local dev):
+
+```
+# Start the Spring Boot app
+./gradlew bootRun
+
+# Trigger an agent build via HTTP API (requires app running on port 8080)
+curl -X POST "http://localhost:8080/api/agent/build?issue=123&repo=dave-chen/spring-ai-agent-demo"
+```
+
+
 
