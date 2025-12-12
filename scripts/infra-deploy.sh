@@ -10,6 +10,12 @@ GH_REPO=${5:-${GITHUB_REPO:-}}
 AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
 AGENT_OIDC_PROVIDER_ARN=${12:-${AGENT_OIDC_PROVIDER_ARN:-}}
+# Default to the provided OIDC provider ARN for convenience if no value was passed
+# NOTE: Replace or remove this default for general public use; this value is account-specific.
+if [ -z "${AGENT_OIDC_PROVIDER_ARN:-}" ] && [ -z "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
+  AGENT_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_ARN:-arn:aws:iam::970030241939:oidc-provider/token.actions.githubusercontent.com}
+  echo "Using default AGENT_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_ARN} (from script defaults)"
+fi
 # Optional behavior flags (env or arg7)
 # - ALLOW_EXISTING_BUCKET: if true, reuse existing S3 bucket rather than erroring
 # - DELETE_ROLLBACK_STACK: if true, delete an existing ROLLBACK_COMPLETE stack before retrying
