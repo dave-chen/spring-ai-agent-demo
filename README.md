@@ -88,6 +88,8 @@ Or, use STS to assume a role (script will use `jq` to parse assume-role output a
 ```
 ASSUME_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/my-deploy-role AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
 ```
+
+Note: The script will attempt to find an existing GitHub OIDC provider (https://token.actions.githubusercontent.com) in the account and reuse it. If you haven't created one and your account restricts creating OpenID Connect providers, create one manually or pass its ARN via an env var `AGENT_OIDC_PROVIDER_ARN`.
 ```
 ```
 

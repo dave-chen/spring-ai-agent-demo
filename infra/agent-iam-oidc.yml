@@ -19,8 +19,21 @@ Parameters:
   AgentQueueArn:
     Type: String
     Description: SQS queue ARN for policy attachments
+  AgentOIDCProviderArn:
+    Type: String
+    Default: ""
+    Description: ARN of an existing OIDC provider to use. If empty, the stack will attempt to create one.
 
 Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OpenIDConnectProvider
+    Condition: CreateOIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
   GitHubOIDCRole:
     Type: AWS::IAM::Role
     Properties:
@@ -30,7 +43,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+              Federated: !If [CreateOIDCProvider, !Ref GitHubOIDCProvider, !Ref AgentOIDCProviderArn]
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringLike:
@@ -73,3 +86,6 @@ Outputs:
   GitHubOIDCRoleArn:
     Description: IAM role ARN for GitHub Actions to assume via OIDC
     Value: !GetAtt GitHubOIDCRole.Arn
+
+Conditions:
+  CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]

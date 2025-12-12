@@ -185,6 +185,21 @@ AGENT_QUEUE_URL=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NA
 AGENT_QUEUE_ARN=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentQueueArn'].OutputValue" --output text || true)
 AGENT_LOCK_TABLE=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentLockTable'].OutputValue" --output text || true)
 AGENT_ARTIFACTS_BUCKET=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentArtifactsBucket'].OutputValue" --output text || true)
+# Detect an existing GitHub OIDC provider ARN in the account (for token.actions.githubusercontent.com)
+EXISTING_OIDC_PROVIDER_ARN=""
+for arn in $(aws_cmd iam list-open-id-connect-providers --query 'OpenIDConnectProviderList[].Arn' --output text 2>/dev/null || true); do
+  if [ -n "$arn" ]; then
+    # Get provider details
+    url=$(aws_cmd iam get-open-id-connect-provider --open-id-connect-provider-arn "$arn" --query 'Url' --output text 2>/dev/null || true)
+    if [ "$url" = "https://token.actions.githubusercontent.com" ]; then
+      EXISTING_OIDC_PROVIDER_ARN="$arn"
+      break
+    fi
+  fi
+done
+if [ -n "$EXISTING_OIDC_PROVIDER_ARN" ]; then
+  echo "Found existing OIDC provider ARN: ${EXISTING_OIDC_PROVIDER_ARN}"
+fi
 
 # Accept owner/repo from CLI args, environment, or interactive prompt
 if [[ -z "${GH_OWNER}" ]]; then
@@ -201,7 +216,7 @@ if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} 2>&1); then
+  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} AgentOIDCProviderArn=${EXISTING_OIDC_PROVIDER_ARN} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${OIDC_STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OIDC_OUTPUT" >&2
