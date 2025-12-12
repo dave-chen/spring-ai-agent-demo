@@ -13,6 +13,8 @@ AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 # - DELETE_ROLLBACK_STACK: if true, delete an existing ROLLBACK_COMPLETE stack before retrying
 ALLOW_EXISTING_BUCKET=${7:-${ALLOW_EXISTING_BUCKET:-false}}
 DELETE_ROLLBACK_STACK=${8:-${DELETE_ROLLBACK_STACK:-false}}
+# Optional: ALLOW_EXISTING_QUEUE to reuse an existing SQS queue
+ALLOW_EXISTING_QUEUE=${9:-${ALLOW_EXISTING_QUEUE:-false}}
 # Optional: AWS_PROFILE to use (respect AWS_PROFILE env var). Example: AWS_PROFILE=myprofile
 AWS_PROFILE=${AWS_PROFILE:-}
 # Optional: ASSUME_ROLE_ARN - if set, assume this role via STS and use temporary credentials
@@ -91,8 +93,15 @@ fi
 # SQS queue check (fifo name must end with .fifo)
 if queue_url=$(aws_cmd sqs get-queue-url --queue-name "${AgentQueueName:-agent-queue.fifo}" --region "${REGION}" 2>/dev/null || true); then
   if [[ -n "$queue_url" ]]; then
-    echo "ERROR: The SQS queue ${AgentQueueName:-agent-queue.fifo} already exists (${queue_url}). Choose a different name or allow CloudFormation to create a new queue name." >&2
-    exit 1
+    if [ "${ALLOW_EXISTING_QUEUE}" = "true" ]; then
+      echo "Reusing existing SQS queue: ${queue_url} (ALLOW_EXISTING_QUEUE=true)"
+      EXISTING_AGENT_QUEUE_URL=${queue_url}
+      EXISTING_AGENT_QUEUE_ARN=$(aws_cmd sqs get-queue-attributes --queue-url "${EXISTING_AGENT_QUEUE_URL}" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text --region "${REGION}" 2>/dev/null || true)
+      echo "Existing SQS ARN: ${EXISTING_AGENT_QUEUE_ARN}"
+    else
+      echo "ERROR: The SQS queue ${AgentQueueName:-agent-queue.fifo} already exists (${queue_url}). Choose a different name or set ALLOW_EXISTING_QUEUE=true to reuse it." >&2
+      exit 1
+    fi
   fi
 fi
 # IAM role check (if role with the same name exists it will cause a create failure)
@@ -110,13 +119,18 @@ if [ -n "${AGENT_ROLE_ARN}" ]; then
 else
   ROLE_PARAM=""
 fi
+if [ -n "${EXISTING_AGENT_QUEUE_ARN:-}" ]; then
+  QUEUE_PARAM="ExistingAgentQueueArn=${EXISTING_AGENT_QUEUE_ARN} ExistingAgentQueueUrl=${EXISTING_AGENT_QUEUE_URL}"
+else
+  QUEUE_PARAM=""
+fi
 DEPLOY_OUTPUT=""
 if ! DEPLOY_OUTPUT=$(aws_cmd cloudformation deploy \
   --template-file infra/agent-infra.yml \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides AgentArtifactsBucketName=${ARTIFACTS_BUCKET} ${ROLE_PARAM} 2>&1); then
+  --parameter-overrides AgentArtifactsBucketName=${ARTIFACTS_BUCKET} ${ROLE_PARAM} ${QUEUE_PARAM} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OUTPUT" >&2

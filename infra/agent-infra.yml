@@ -10,6 +10,14 @@ Parameters:
   AgentQueueName:
     Type: String
     Default: agent-queue.fifo
+  ExistingAgentQueueArn:
+    Type: String
+    Default: ""
+    Description: "Optional existing SQS queue ARN. If provided, the stack will not create an SQS queue."
+  ExistingAgentQueueUrl:
+    Type: String
+    Default: ""
+    Description: "Optional existing SQS queue URL. If provided, the stack will not create an SQS queue."
   AgentRoleArn:
     Type: String
     Default: ""
@@ -25,6 +33,7 @@ Resources:
 
   AgentQueue:
     Type: AWS::SQS::Queue
+    Condition: CreateAgentQueue
     Properties:
       QueueName: !Ref AgentQueueName
       FifoQueue: true
@@ -76,7 +85,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt AgentQueue.Arn
+                Resource: !If [CreateAgentQueue, !GetAtt AgentQueue.Arn, !Ref ExistingAgentQueueArn]
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -99,7 +108,7 @@ Outputs:
     Value: !Ref AgentArtifactsBucket
   AgentQueueUrl:
     Description: SQS FIFO queue URL
-    Value: !Ref AgentQueue
+    Value: !If [CreateAgentQueue, !Ref AgentQueue, !Ref ExistingAgentQueueUrl]
   AgentLockTable:
     Description: DynamoDB lock table name
     Value: !Ref AgentLockTable
@@ -108,7 +117,8 @@ Outputs:
     Value: !If [CreateAgentRole, !GetAtt AgentRole.Arn, !Ref AgentRoleArn]
   AgentQueueArn:
     Description: SQS queue ARN
-    Value: !GetAtt AgentQueue.Arn
+    Value: !If [CreateAgentQueue, !GetAtt AgentQueue.Arn, !Ref ExistingAgentQueueArn]
 
 Conditions:
   CreateAgentRole: !Equals [!Ref AgentRoleArn, ""]
+  CreateAgentQueue: !Equals [!Ref ExistingAgentQueueArn, ""]
