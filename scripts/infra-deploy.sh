@@ -7,6 +7,7 @@ ARTIFACTS_BUCKET=${2:-spring-ai-agent-artifacts-$(date +%s)}
 REGION=${3:-${AWS_REGION:-us-east-1}}
 GH_OWNER=${4:-${GITHUB_OWNER:-}}
 GH_REPO=${5:-${GITHUB_REPO:-}}
+AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 
 check_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -58,13 +59,19 @@ if aws iam get-role --role-name "${ROLE_NAME}" >/dev/null 2>&1; then
   echo "ERROR: IAM role ${ROLE_NAME} already exists in the account; CloudFormation will not take ownership. Choose a different name, or delete the existing role if appropriate." >&2
   exit 1
 fi
+if [ -n "${AGENT_ROLE_ARN}" ]; then
+  echo "Using existing role ARN: ${AGENT_ROLE_ARN}; CloudFormation will not create a new IAM role"
+  ROLE_PARAM="AgentRoleArn=${AGENT_ROLE_ARN}"
+else
+  ROLE_PARAM=""
+fi
 DEPLOY_OUTPUT=""
-  if ! DEPLOY_OUTPUT=$(aws cloudformation deploy \
+if ! DEPLOY_OUTPUT=$(aws cloudformation deploy \
   --template-file infra/agent-infra.yml \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides AgentArtifactsBucketName=${ARTIFACTS_BUCKET} 2>&1); then
+  --parameter-overrides AgentArtifactsBucketName=${ARTIFACTS_BUCKET} ${ROLE_PARAM} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OUTPUT" >&2
@@ -81,11 +88,6 @@ DEPLOY_OUTPUT=""
   fi
   exit 2
 fi
-  --template-file infra/agent-infra.yml \
-  --stack-name "${STACK_NAME}" \
-  --region "${REGION}" \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides AgentArtifactsBucketName=${ARTIFACTS_BUCKET}
 
 echo "Stack deploy complete"
 
