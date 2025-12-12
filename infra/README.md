@@ -2,6 +2,7 @@
 
 This folder contains a simple CloudFormation template `agent-infra.yml` to create:
  - Reuse existing SQS Queue: `ALLOW_EXISTING_QUEUE=true` (useful when you have an existing FIFO queue you want to reuse). Pass a queue name; the script will query it.
+ - Reuse existing IAM role: `ALLOW_EXISTING_ROLE=true` (useful when you have a pre-existing role to reuse). If you prefer the script to detect role ARN by name, set `ALLOW_EXISTING_ROLE=true`, otherwise specify `AGENT_ROLE_ARN` as the 6th argument.
 - Install the AWS CLI v2 (see https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
 - Install cfn-lint to lint CloudFormation templates (optional): `python -m pip install --user cfn-lint`.
 

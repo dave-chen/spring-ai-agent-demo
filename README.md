@@ -71,10 +71,7 @@ AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifa
 
 If you have a bucket or stack from a previous failed deploy, you can reuse the bucket and/or delete the old stack automatically:
 
-- Reuse existing S3 bucket: `ALLOW_EXISTING_BUCKET=true` (useful when your prior attempt created a bucket that you want to keep).
-- Delete ROLLBACK_COMPLETE stack and retry: `DELETE_ROLLBACK_STACK=true` (be careful: this destroys the previous stack's resources).
- - Reuse existing SQS queue: `ALLOW_EXISTING_QUEUE=true` (useful when you have an existing FIFO queue you want to reuse).
-- Example that reuses bucket and deletes the old stack to retry:
+ - Reuse existing IAM role: `ALLOW_EXISTING_ROLE=true` (useful when you already provisioned a role and want to reuse it; ensure `AGENT_ROLE_ARN` or allow the script to auto-detect the role ARN by name).
 
 ```
 ALLOW_EXISTING_BUCKET=true DELETE_ROLLBACK_STACK=true AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name

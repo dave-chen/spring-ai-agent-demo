@@ -15,6 +15,8 @@ ALLOW_EXISTING_BUCKET=${7:-${ALLOW_EXISTING_BUCKET:-false}}
 DELETE_ROLLBACK_STACK=${8:-${DELETE_ROLLBACK_STACK:-false}}
 # Optional: ALLOW_EXISTING_QUEUE to reuse an existing SQS queue
 ALLOW_EXISTING_QUEUE=${9:-${ALLOW_EXISTING_QUEUE:-false}}
+# Optional: ALLOW_EXISTING_ROLE to reuse an existing IAM role with the same name
+ALLOW_EXISTING_ROLE=${10:-${ALLOW_EXISTING_ROLE:-false}}
 # Optional: AWS_PROFILE to use (respect AWS_PROFILE env var). Example: AWS_PROFILE=myprofile
 AWS_PROFILE=${AWS_PROFILE:-}
 # Optional: ASSUME_ROLE_ARN - if set, assume this role via STS and use temporary credentials
@@ -107,10 +109,16 @@ fi
 # IAM role check (if role with the same name exists it will cause a create failure)
 ROLE_NAME="agent-runtime-role-${STACK_NAME}"
 if aws_cmd iam get-role --role-name "${ROLE_NAME}" >/dev/null 2>&1; then
-  echo "INFO: IAM role ${ROLE_NAME} already exists in the account; if you intend to use an existing role, pass it as the sixth parameter (AGENT_ROLE_ARN) or set AGENT_ROLE_ARN env to its ARN." >&2
+  EXISTING_ROLE_ARN=$(aws_cmd iam get-role --role-name "${ROLE_NAME}" --query 'Role.Arn' --output text 2>/dev/null || true)
+  echo "INFO: IAM role ${ROLE_NAME} already exists in the account (ARN: ${EXISTING_ROLE_ARN})." >&2
   if [ -z "${AGENT_ROLE_ARN}" ]; then
-    echo "ERROR: IAM role exists and no AGENT_ROLE_ARN provided. Set AGENT_ROLE_ARN or delete the existing role." >&2
-    exit 1
+    if [ "${ALLOW_EXISTING_ROLE}" = "true" ]; then
+      echo "Using existing IAM role ARN ${EXISTING_ROLE_ARN} (ALLOW_EXISTING_ROLE=true)" >&2
+      AGENT_ROLE_ARN=${EXISTING_ROLE_ARN}
+    else
+      echo "ERROR: IAM role exists and no AGENT_ROLE_ARN provided. Set AGENT_ROLE_ARN or pass ALLOW_EXISTING_ROLE=true to reuse the existing role or delete the role." >&2
+      exit 1
+    fi
   fi
 fi
 if [ -n "${AGENT_ROLE_ARN}" ]; then
