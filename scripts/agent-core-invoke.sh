@@ -39,8 +39,12 @@ if [ -n "${USE_BEDROCK:-}" ] && [ -n "${RUNTIME_ID}" ]; then
   echo "$OUTPUT" > "$ARTIFACTS_DIR/bedrock_output_issue_${ISSUE}.json"
   # Upload artifacts to S3 if bucket provided
   if [ -n "${AGENT_ARTIFACTS_BUCKET:-}" ]; then
-    echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
-    aws s3 cp "$ARTIFACTS_DIR/" "s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/" --recursive || echo "s3 upload failed"
+    if command -v aws >/dev/null 2>&1; then
+      echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
+      aws s3 cp "$ARTIFACTS_DIR/" "s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/" --recursive || echo "s3 upload failed"
+    else
+      echo "Warning: AGENT_ARTIFACTS_BUCKET set but aws CLI not found; skipping upload"
+    fi
   fi
   echo "Done"
   exit 0
@@ -62,8 +66,12 @@ if [ -n "${CLAUDE_API_KEY:-}" ] && [ -z "${USE_BEDROCK:-}" ]; then
   mkdir -p "$ARTIFACTS_DIR"
   echo "$RESPONSE" > "$ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
   if [ -n "${AGENT_ARTIFACTS_BUCKET:-}" ]; then
-    echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
-    aws s3 cp "$ARTIFACTS_DIR/" "s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/" --recursive || echo "s3 upload failed"
+    if command -v aws >/dev/null 2>&1; then
+      echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
+      aws s3 cp "$ARTIFACTS_DIR/" "s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/" --recursive || echo "s3 upload failed"
+    else
+      echo "Warning: AGENT_ARTIFACTS_BUCKET set but aws CLI not found; skipping upload"
+    fi
   fi
   echo "Claude response saved to $ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
   exit 0
