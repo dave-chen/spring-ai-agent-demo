@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eu
+set -euo pipefail
 
 # Usage: infra-deploy.sh [STACK_NAME] [ARTIFACTS_BUCKET] [REGION] [GITHUB_OWNER] [GITHUB_REPO]
 STACK_NAME=${1:-spring-ai-agent-agentinfra}
@@ -20,6 +20,12 @@ echo "Preparing to deploy CloudFormation stack ${STACK_NAME} in ${REGION} with a
 
 check_command aws || exit 1
 
+# Ensure AWS CLI has credentials and we can call STS
+if ! aws sts get-caller-identity --output text >/dev/null 2>&1; then
+  echo "ERROR: aws CLI couldn't retrieve caller identity. Check your credentials, region, and permissions (aws configure list)." >&2
+  exit 2
+fi
+
 # Optional: run local validation (cfn-lint + AWS validate-template if available)
 if command -v cfn-lint >/dev/null 2>&1; then
   echo "Running cfn-lint on CloudFormation templates..."
@@ -28,7 +34,26 @@ else
   echo "Note: cfn-lint not found; to lint templates locally install cfn-lint (pip install --user cfn-lint)."
 fi
 
-aws cloudformation deploy \
+echo "Deploying CloudFormation stack ${STACK_NAME} in ${REGION}"
+DEPLOY_OUTPUT=""
+if ! DEPLOY_OUTPUT=$(aws cloudformation deploy \
+  --template-file infra/agent-infra.yml \
+  --stack-name "${STACK_NAME}" \
+  --region "${REGION}" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides AgentArtifactsBucketName=${ARTIFACTS_BUCKET} 2>&1); then
+  echo "ERROR: CloudFormation deploy failed for ${STACK_NAME}" >&2
+  echo "--- aws deploy output ---" >&2
+  echo "$DEPLOY_OUTPUT" >&2
+  # If stack exists, show events to help debug; otherwise advise on typical reasons
+  if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${REGION}" >/dev/null 2>&1; then
+    echo "--- CloudFormation stack events (recent) ---" >&2
+    aws cloudformation describe-stack-events --stack-name "${STACK_NAME}" --region "${REGION}" --max-items 20 --output json >&2 || true
+  else
+    echo "Stack ${STACK_NAME} does not exist after deploy; ensure you have CreateStack permissions and the AWS account/region is correct." >&2
+  fi
+  exit 2
+fi
   --template-file infra/agent-infra.yml \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
@@ -49,7 +74,25 @@ if [[ -z "${GH_REPO}" ]]; then
   read -p "Enter GitHub repo name: " GH_REPO
 fi
 
-aws cloudformation deploy \
+echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
+DEPLOY_OIDC_OUTPUT=""
+if ! DEPLOY_OIDC_OUTPUT=$(aws cloudformation deploy \
+  --template-file infra/agent-iam-oidc.yml \
+  --stack-name "${OIDC_STACK_NAME}" \
+  --region "${REGION}" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${ARTIFACTS_BUCKET} AgentLockTable=${STACK_NAME}-AgentLockTable AgentQueueUrl=${STACK_NAME}-AgentQueue 2>&1); then
+  echo "ERROR: CloudFormation deploy failed for ${OIDC_STACK_NAME}" >&2
+  echo "--- aws deploy output ---" >&2
+  echo "$DEPLOY_OIDC_OUTPUT" >&2
+  if aws cloudformation describe-stacks --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" >/dev/null 2>&1; then
+    echo "--- CloudFormation OIDC stack events (recent) ---" >&2
+    aws cloudformation describe-stack-events --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" --max-items 20 --output json >&2 || true
+  else
+    echo "Stack ${OIDC_STACK_NAME} does not exist after deploy. Check permissions and role trust settings." >&2
+  fi
+  exit 2
+fi
   --template-file infra/agent-iam-oidc.yml \
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
@@ -59,6 +102,16 @@ aws cloudformation deploy \
 echo "OIDC stack deploy complete"
 
 echo "CloudFormation stacks deployed. Outputs:"
-aws cloudformation describe-stacks --stack-name ${STACK_NAME} --query 'Stacks[0].Outputs' --region ${REGION}
-aws cloudformation describe-stacks --stack-name ${OIDC_STACK_NAME} --query 'Stacks[0].Outputs' --region ${REGION}
+if aws cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} >/dev/null 2>&1; then
+  echo "Stack outputs for ${STACK_NAME}:"
+  aws cloudformation describe-stacks --stack-name ${STACK_NAME} --query 'Stacks[0].Outputs' --region ${REGION}
+else
+  echo "No stack outputs: ${STACK_NAME} doesn't exist in ${REGION}" >&2
+fi
+if aws cloudformation describe-stacks --stack-name ${OIDC_STACK_NAME} --region ${REGION} >/dev/null 2>&1; then
+  echo "Stack outputs for ${OIDC_STACK_NAME}:"
+  aws cloudformation describe-stacks --stack-name ${OIDC_STACK_NAME} --query 'Stacks[0].Outputs' --region ${REGION}
+else
+  echo "No stack outputs: ${OIDC_STACK_NAME} doesn't exist in ${REGION}" >&2
+fi
 
