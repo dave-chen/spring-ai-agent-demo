@@ -135,9 +135,9 @@ if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
   echo "Detected existing stack ${STACK_NAME} in ROLLBACK_COMPLETE state"
   if [ "${DELETE_ROLLBACK_STACK}" = "true" ]; then
     echo "Deleting stack ${STACK_NAME} (DELETE_ROLLBACK_STACK=true) and retrying..."
-    aws cloudformation delete-stack --stack-name "${STACK_NAME}" --region "${REGION}" || true
+    aws_cmd cloudformation delete-stack --stack-name "${STACK_NAME}" --region "${REGION}" || true
     echo "Waiting for stack deletion to complete..."
-    aws cloudformation wait stack-delete-complete --stack-name "${STACK_NAME}" --region "${REGION}" || true
+    aws_cmd cloudformation wait stack-delete-complete --stack-name "${STACK_NAME}" --region "${REGION}" || true
     echo "Old stack deleted. Continuing with new deploy..."
   else
     echo "Creating a new stack name by appending timestamp to avoid ROLLBACK_COMPLETE conflicts."
