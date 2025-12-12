@@ -8,6 +8,7 @@ REGION=${3:-${AWS_REGION:-us-east-1}}
 GH_OWNER=${4:-${GITHUB_OWNER:-}}
 GH_REPO=${5:-${GITHUB_REPO:-}}
 AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
+AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
 # Optional behavior flags (env or arg7)
 # - ALLOW_EXISTING_BUCKET: if true, reuse existing S3 bucket rather than erroring
 # - DELETE_ROLLBACK_STACK: if true, delete an existing ROLLBACK_COMPLETE stack before retrying
@@ -209,6 +210,32 @@ if [[ -z "${GH_REPO}" ]]; then
   read -p "Enter GitHub repo name: " GH_REPO
 fi
 
+# Detect an existing GitHub OIDC role named gh-actions-agent-role-${GH_REPO}
+OIDC_ROLE_NAME="gh-actions-agent-role-${GH_REPO}"
+if aws_cmd iam get-role --role-name "${OIDC_ROLE_NAME}" >/dev/null 2>&1; then
+  EXISTING_OIDC_ROLE_ARN=$(aws_cmd iam get-role --role-name "${OIDC_ROLE_NAME}" --query 'Role.Arn' --output text 2>/dev/null || true)
+  echo "INFO: Found existing OIDC role ${OIDC_ROLE_NAME} (ARN: ${EXISTING_OIDC_ROLE_ARN})"
+  if [ -n "${AGENT_OIDC_ROLE_ARN}" ]; then
+    echo "Using provided OIDC role ARN: ${AGENT_OIDC_ROLE_ARN}; OIDC stack will not create a new IAM role"
+    # Extract the role name from the ARN to allow attaching policies
+    AGENT_OIDC_ROLE_NAME=$(echo "${AGENT_OIDC_ROLE_ARN}" | awk -F'/' '{print $NF}')
+    OIDC_ROLE_PARAM="AgentOIDCRoleArn=${AGENT_OIDC_ROLE_ARN} AgentOIDCRoleName=${AGENT_OIDC_ROLE_NAME}"
+  fi
+  if [ -n "${AGENT_OIDC_ROLE_ARN}" ]; then
+    # Verify the provided OIDC role ARN exists and is valid
+    if ! aws_cmd iam get-role --role-name "${AGENT_OIDC_ROLE_NAME}" >/dev/null 2>&1; then
+      echo "ERROR: Provided AGENT_OIDC_ROLE_ARN points to role ${AGENT_OIDC_ROLE_NAME}, but the role cannot be found. Verify the ARN and role exist in the account (or omit and let CloudFormation create the role)." >&2
+      exit 1
+    fi
+    echo "Ensure the existing role's trust policy includes token.actions.githubusercontent.com as a federated principal to allow GitHub Actions to assume the role via OIDC."
+  fi
+      AGENT_OIDC_ROLE_ARN=${EXISTING_OIDC_ROLE_ARN}
+    else
+      echo "Note: OIDC role ${OIDC_ROLE_NAME} exists but ALLOW_EXISTING_ROLE is not set; deploy will attempt to create or error depending on permissions."
+    fi
+  fi
+fi
+
 echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
 DEPLOY_OIDC_OUTPUT=""
 if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
@@ -216,7 +243,7 @@ if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} AgentOIDCProviderArn=${EXISTING_OIDC_PROVIDER_ARN} 2>&1); then
+  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} AgentOIDCProviderArn=${EXISTING_OIDC_PROVIDER_ARN} ${OIDC_ROLE_PARAM:-} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${OIDC_STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OIDC_OUTPUT" >&2

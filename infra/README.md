@@ -22,6 +22,8 @@ If your AWS account restricts role creation, pass a pre-existing role ARN as a s
 
 ```
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name arn:aws:iam::970030241939:role/existing-agent-role
+
+If you have an existing GitHub OIDC role (gh-actions-agent-role-<repo>) and want to reuse it rather than creating, set `AGENT_OIDC_ROLE_ARN` environment variable or pass it as the 11th argument to the script, and set `ALLOW_EXISTING_ROLE=true` if you want the script to auto-detect and reuse the role by name.
 ```
 
 If you created a new AWS CLI profile, run using that profile:

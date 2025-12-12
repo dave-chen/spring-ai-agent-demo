@@ -23,6 +23,14 @@ Parameters:
     Type: String
     Default: ""
     Description: ARN of an existing OIDC provider to use. If empty, the stack will attempt to create one.
+  AgentOIDCRoleArn:
+    Type: String
+    Default: ""
+    Description: ARN of an existing GitHub OIDC role to use. If empty, the stack will create a new role named gh-actions-agent-role-${GitHubRepo}.
+  AgentOIDCRoleName:
+    Type: String
+    Default: ""
+    Description: Name of an existing GitHub OIDC role to attach policies to (when using AgentOIDCRoleArn).
 
 Resources:
   GitHubOIDCProvider:
@@ -36,6 +44,7 @@ Resources:
         - 6938fd4d98bab03faadb97b34396831e3780aea1
   GitHubOIDCRole:
     Type: AWS::IAM::Role
+    Condition: CreateOIDCRole
     Properties:
       RoleName: !Sub "gh-actions-agent-role-${GitHubRepo}"
       AssumeRolePolicyDocument:
@@ -82,10 +91,49 @@ Resources:
                   - bedrock:InvokeModel
                 Resource: '*'
 
+  GitHubOIDCRolePolicy:
+    Type: AWS::IAM::Policy
+    Condition: AttachPolicyToExistingOIDCRole
+    Properties:
+      PolicyName: GitHubOIDCRolePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:aws:s3:::${AgentArtifactsBucket}
+              - !Sub arn:aws:s3:::${AgentArtifactsBucket}/*
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: !Ref AgentQueueArn
+          - Effect: Allow
+            Action:
+              - dynamodb:PutItem
+              - dynamodb:GetItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+            Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AgentLockTable}
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+            Resource: '*'
+      Roles:
+        - !Ref AgentOIDCRoleName
+
 Outputs:
   GitHubOIDCRoleArn:
     Description: IAM role ARN for GitHub Actions to assume via OIDC
-    Value: !GetAtt GitHubOIDCRole.Arn
+    Value: !If [CreateOIDCRole, !GetAtt GitHubOIDCRole.Arn, !Ref AgentOIDCRoleArn]
 
 Conditions:
   CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]
+  CreateOIDCRole: !Equals [!Ref AgentOIDCRoleArn, ""]
+  AttachPolicyToExistingOIDCRole: !Not [!Equals [!Ref AgentOIDCRoleName, ""]]

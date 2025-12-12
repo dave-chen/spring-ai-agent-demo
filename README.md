@@ -98,6 +98,8 @@ CloudFormation outputs will provide `AgentRoleArn`, `AgentArtifactsBucket`, `Age
 Set the following repo secrets (or store in AWS Secrets Manager) before running workflows:
 - `AWS_REGION`
 - `AWS_OIDC_ROLE_TO_ASSUME` (or use `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` temporarily)
+ - `AWS_OIDC_ROLE_TO_ASSUME` (or use `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` temporarily)
+ - `AGENT_OIDC_ROLE_ARN` (optional) — ARN of an existing GitHub OIDC role (gh-actions-agent-role-<repo>) to reuse; set when your account restricts role creation.
 - `AGENT_APPROVERS` (comma-separated logins allowed to approve)
 - `AGENTCORE_RUNTIME_ID` and `AGENTCORE_ROLE_ARN`
 
