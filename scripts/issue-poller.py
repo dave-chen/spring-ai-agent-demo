@@ -62,6 +62,7 @@ def is_authorized(reaction_user):
 
 def main():
     issues = get_autobuild_issues()
+    candidates = []
     for issue in issues:
         number = issue["number"]
         reactions = get_reactions(number)
@@ -75,10 +76,15 @@ def main():
                 if is_authorized(user):
                     authorized = True
         if authorized:
-            print(f"Issue #{number} approved by authorized user — dispatching")
-            dispatch_build(number, plus_one_count)
+            candidates.append((number, plus_one_count))
         else:
             print(f"Issue #{number} not approved (authorized rocket) — skipping")
+
+    # Sort by votes (desc) and dispatch highest-priority items
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    for number, votes in candidates:
+        print(f"Issue #{number} approved and prioritized ({votes} votes) — dispatching")
+        dispatch_build(number, votes)
 
 if __name__ == "__main__":
     main()

@@ -40,6 +40,9 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Acquire Lock
+              - name: Install gh CLI
+                run: sudo apt-get update && sudo apt-get install -y gh
+
         env:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LOCK_KEY: ${{ github.event.client_payload.lock_key }}
@@ -53,6 +56,10 @@ jobs:
           AGENTCORE_ROLE_ARN: ${{ secrets.AGENTCORE_ROLE_ARN }}
           AGENTCORE_RUNTIME_ID: ${{ secrets.AGENTCORE_RUNTIME_ID }}
         run: |
+          # Authenticate gh CLI for PR creation
+          echo "Authenticating gh CLI"
+          echo "${GITHUB_TOKEN}" | gh auth login --with-token || true
+          gh auth status || true
           bash scripts/agent-build.sh ${ISSUE_NUMBER}
 
       - name: Release lock
