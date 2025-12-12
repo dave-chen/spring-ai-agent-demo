@@ -56,7 +56,11 @@ fi
 
 # Ensure AWS CLI has credentials and we can call STS
 echo "Current AWS caller identity:"
+CALLER_ARN=$(aws_cmd sts get-caller-identity --query 'Arn' --output text 2>/dev/null || true)
 aws_cmd sts get-caller-identity --output text || true
+if [[ "${CALLER_ARN}" == *"AWSReservedSSO"* ]]; then
+  echo "Warning: the current credentials appear to be an AWS SSO session (${CALLER_ARN}). To use a different user/profile, run: aws sso login --profile <profile> or set AWS_PROFILE=<profile> or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables." >&2
+fi
 if ! aws_cmd sts get-caller-identity --output text >/dev/null 2>&1; then
   echo "ERROR: aws CLI couldn't retrieve caller identity. Check your credentials, region, and permissions (aws configure list)." >&2
   exit 2
