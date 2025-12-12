@@ -1,0 +1,62 @@
+name: Agent Build
+
+on:
+  repository_dispatch:
+    types: [agent-build]
+
+jobs:
+  agent-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests boto3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Acquire Lock
+        env:
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          LOCK_KEY: ${{ github.event.client_payload.lock_key }}
+        run: |
+          python scripts/lock.py acquire --lock-key "${LOCK_KEY}" --ttl-minutes 30
+
+      - name: Run agent build
+        env:
+          ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AGENTCORE_ROLE_ARN: ${{ secrets.AGENTCORE_ROLE_ARN }}
+          AGENTCORE_RUNTIME_ID: ${{ secrets.AGENTCORE_RUNTIME_ID }}
+        run: |
+          bash scripts/agent-build.sh ${ISSUE_NUMBER}
+
+      - name: Release lock
+        env:
+          LOCK_KEY: ${{ github.event.client_payload.lock_key }}
+        run: |
+          python scripts/lock.py release --lock-key "${LOCK_KEY}"

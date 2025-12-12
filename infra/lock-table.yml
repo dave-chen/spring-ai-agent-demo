@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DynamoDB table for agent locks
+Resources:
+  AgentLockTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AgentLockTable
+      AttributeDefinitions:
+        - AttributeName: lockKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: lockKey
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
