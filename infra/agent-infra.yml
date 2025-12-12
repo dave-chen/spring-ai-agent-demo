@@ -10,6 +10,10 @@ Parameters:
   AgentQueueName:
     Type: String
     Default: agent-queue.fifo
+  AgentRoleArn:
+    Type: String
+    Default: ""
+    Description: "Optional existing Agent role ARN. If provided, the stack will not create an IAM role."
 
 Resources:
   AgentArtifactsBucket:
@@ -43,6 +47,7 @@ Resources:
 
   AgentRole:
     Type: AWS::IAM::Role
+    Condition: CreateAgentRole
     Properties:
       RoleName: !Sub "agent-runtime-role-${AWS::StackName}"
       AssumeRolePolicyDocument:
@@ -100,4 +105,7 @@ Outputs:
     Value: !Ref AgentLockTable
   AgentRoleArn:
     Description: Agent runtime role ARN
-    Value: !GetAtt AgentRole.Arn
+    Value: !If [CreateAgentRole, !GetAtt AgentRole.Arn, !Ref AgentRoleArn]
+
+Conditions:
+  CreateAgentRole: !Equals [!Ref AgentRoleArn, ""]

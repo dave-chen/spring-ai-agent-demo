@@ -22,4 +22,10 @@ Deploy using the helper script (noninteractive):
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
 ```
 
+If your AWS account restricts role creation, pass a pre-existing role ARN as a sixth argument to skip role creation:
+
+```
+AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name arn:aws:iam::970030241939:role/existing-agent-role
+```
+
 The stack outputs include `AgentArtifactsBucket`, `AgentQueueUrl`, `AgentLockTable`, and `AgentRoleArn`.

@@ -61,6 +61,12 @@ Deploy the infra stack (noninteractive):
 ```
 # Usage: scripts/infra-deploy.sh [STACK_NAME] [ARTIFACTS_BUCKET] [REGION] [GITHUB_OWNER] [GITHUB_REPO]
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+
+If your AWS account restricts creation of new IAM roles, pass an existing role ARN and the stack will not create a role:
+
+```
+AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name arn:aws:iam::970030241939:role/existing-agent-role
+```
 ```
 
 CloudFormation outputs will provide `AgentRoleArn`, `AgentArtifactsBucket`, `AgentQueueUrl`, and `AgentLockTable` names.
