@@ -106,6 +106,9 @@ Outputs:
   AgentRoleArn:
     Description: Agent runtime role ARN
     Value: !If [CreateAgentRole, !GetAtt AgentRole.Arn, !Ref AgentRoleArn]
+  AgentQueueArn:
+    Description: SQS queue ARN
+    Value: !GetAtt AgentQueue.Arn
 
 Conditions:
   CreateAgentRole: !Equals [!Ref AgentRoleArn, ""]

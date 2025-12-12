@@ -16,6 +16,9 @@ Parameters:
   AgentQueueUrl:
     Type: String
     Description: SQS queue URL for job messages
+  AgentQueueArn:
+    Type: String
+    Description: SQS queue ARN for policy attachments
 
 Resources:
   GitHubOIDCRole:
@@ -53,7 +56,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
-                Resource: !GetAtt AgentQueue.Arn
+                Resource: !Ref AgentQueueArn
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem

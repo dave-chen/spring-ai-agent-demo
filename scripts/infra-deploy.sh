@@ -158,6 +158,12 @@ echo "Now deploying the GitHub OIDC role for repository access"
 OIDC_STACK_NAME=${STACK_NAME}-oidc
 echo "OIDC stack name: ${OIDC_STACK_NAME}"
 
+# Fetch outputs from main stack to pass as parameters into OIDC stack
+AGENT_QUEUE_URL=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentQueueUrl'].OutputValue" --output text || true)
+AGENT_QUEUE_ARN=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentQueueArn'].OutputValue" --output text || true)
+AGENT_LOCK_TABLE=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentLockTable'].OutputValue" --output text || true)
+AGENT_ARTIFACTS_BUCKET=$(aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} --query "Stacks[0].Outputs[?OutputKey=='AgentArtifactsBucket'].OutputValue" --output text || true)
+
 # Accept owner/repo from CLI args, environment, or interactive prompt
 if [[ -z "${GH_OWNER}" ]]; then
   read -p "Enter GitHub owner (user or org): " GH_OWNER
@@ -173,7 +179,7 @@ if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${ARTIFACTS_BUCKET} AgentLockTable=${STACK_NAME}-AgentLockTable AgentQueueUrl=${STACK_NAME}-AgentQueue 2>&1); then
+  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${OIDC_STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OIDC_OUTPUT" >&2
