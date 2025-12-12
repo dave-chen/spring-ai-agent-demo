@@ -79,6 +79,10 @@ Resources:
                 Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AgentLockTableName}
               - Effect: Allow
                 Action:
+                  - cloudfront:CreateInvalidation
+                Resource: '*'
+              - Effect: Allow
+                Action:
                   - sts:AssumeRole
                 Resource: '*'
 

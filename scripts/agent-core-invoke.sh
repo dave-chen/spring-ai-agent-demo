@@ -37,6 +37,11 @@ if [ -n "${USE_BEDROCK:-}" ] && [ -n "${RUNTIME_ID}" ]; then
   # Save output as an artifact
   mkdir -p "$ARTIFACTS_DIR"
   echo "$OUTPUT" > "$ARTIFACTS_DIR/bedrock_output_issue_${ISSUE}.json"
+  # Upload artifacts to S3 if bucket provided
+  if [ -n "${AGENT_ARTIFACTS_BUCKET:-}" ]; then
+    echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
+    aws s3 cp "$ARTIFACTS_DIR/" "s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/" --recursive || echo "s3 upload failed"
+  fi
   echo "Done"
   exit 0
 fi
@@ -56,6 +61,10 @@ if [ -n "${CLAUDE_API_KEY:-}" ] && [ -z "${USE_BEDROCK:-}" ]; then
     -d "{\"model\":\"claude-2.1\", \"prompt\": \"${CLAUDE_PROMPT}\", \"max_tokens\": 1000}")
   mkdir -p "$ARTIFACTS_DIR"
   echo "$RESPONSE" > "$ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  if [ -n "${AGENT_ARTIFACTS_BUCKET:-}" ]; then
+    echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
+    aws s3 cp "$ARTIFACTS_DIR/" "s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/" --recursive || echo "s3 upload failed"
+  fi
   echo "Claude response saved to $ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
   exit 0
 fi
