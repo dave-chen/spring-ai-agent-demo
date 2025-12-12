@@ -249,6 +249,16 @@ if [ -n "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
   EXISTING_OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${AGENT_OIDC_PROVIDER_DOMAIN}"
 fi
 if [ -n "${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}" ]; then
+  # substitute any ${AWS::AccountId} placeholder into the hardcoded ARN
+  if [[ "${AGENT_OIDC_PROVIDER_HARDCODED_ARN}" == *'${AWS::AccountId}'* ]] || [[ "${AGENT_OIDC_PROVIDER_HARDCODED_ARN}" == *"\${AWS::AccountId}"* ]]; then
+    if [ -n "${ACCOUNT_ID}" ]; then
+      AGENT_OIDC_PROVIDER_HARDCODED_ARN=${AGENT_OIDC_PROVIDER_HARDCODED_ARN//\${AWS::AccountId}/${ACCOUNT_ID}}
+      echo "Substituted AWS Account ID into AGENT_OIDC_PROVIDER_HARDCODED_ARN: ${AGENT_OIDC_PROVIDER_HARDCODED_ARN}"
+    else
+      echo "ERROR: Unable to resolve AWS account id to substitute in AGENT_OIDC_PROVIDER_HARDCODED_ARN" >&2
+      exit 1
+    fi
+  fi
   OIDC_PROVIDER_PARAM="AgentOIDCProviderHardcodedArn=${AGENT_OIDC_PROVIDER_HARDCODED_ARN}"
   EXISTING_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_HARDCODED_ARN}
 fi

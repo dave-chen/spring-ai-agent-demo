@@ -149,6 +149,18 @@ Outputs:
   GitHubOIDCRoleArn:
     Description: IAM role ARN for GitHub Actions to assume via OIDC
     Value: !If [CreateOIDCRole, !GetAtt GitHubOIDCRole.Arn, !Ref AgentOIDCRoleArn]
+  ChosenOIDCProviderArn:
+    Description: The OIDC provider ARN chosen by the template (created, supplied, or constructed from domain)
+    Value: !If
+      - CreateOIDCProvider
+      - !GetAtt GitHubOIDCProvider.Arn
+      - !If
+        - ProvideOIDCProviderArn
+        - !Ref AgentOIDCProviderArn
+        - !If
+          - ProvideOIDCProviderHardcoded
+          - !Ref AgentOIDCProviderHardcodedArn
+          - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/${AgentOIDCProviderDomain}"
 
 Conditions:
   CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]
