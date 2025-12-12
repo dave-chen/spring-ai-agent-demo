@@ -10,6 +10,7 @@ GH_REPO=${5:-${GITHUB_REPO:-}}
 AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
 AGENT_OIDC_PROVIDER_ARN=${12:-${AGENT_OIDC_PROVIDER_ARN:-}}
+AGENT_OIDC_PROVIDER_HARDCODED_ARN=${13:-${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}}
 # Default to the provided OIDC provider ARN for convenience if no value was passed
 # NOTE: Replace or remove this default for general public use; this value is account-specific.
 if [ -z "${AGENT_OIDC_PROVIDER_ARN:-}" ] && [ -z "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
@@ -246,6 +247,10 @@ if [ -n "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
   OIDC_PROVIDER_PARAM="AgentOIDCProviderDomain=${AGENT_OIDC_PROVIDER_DOMAIN}"
   # Ensure we set EXISTING_OIDC_PROVIDER_ARN for later use
   EXISTING_OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${AGENT_OIDC_PROVIDER_DOMAIN}"
+fi
+if [ -n "${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}" ]; then
+  OIDC_PROVIDER_PARAM="AgentOIDCProviderHardcodedArn=${AGENT_OIDC_PROVIDER_HARDCODED_ARN}"
+  EXISTING_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_HARDCODED_ARN}
 fi
 if [ -n "$EXISTING_OIDC_PROVIDER_ARN" ]; then
   echo "Found existing OIDC provider ARN: ${EXISTING_OIDC_PROVIDER_ARN}"

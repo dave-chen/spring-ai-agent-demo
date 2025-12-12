@@ -32,6 +32,10 @@ Parameters:
     Default: ""
     Description: ARN of an existing GitHub OIDC role to use. If empty, the stack will create a new role named gh-actions-agent-role-${GitHubRepo}.
   AgentOIDCRoleName:
+      AgentOIDCProviderHardcodedArn:
+        Type: String
+        Default: ""
+        Description: "(Debug) Hardcoded OIDC provider ARN to use for federated principal (e.g. arn:aws:iam::970030241939:oidc-provider/token.actions.githubusercontent.com). Only used if provided."
     Type: String
     Default: ""
     Description: Name of an existing GitHub OIDC role to attach policies to (when using AgentOIDCRoleArn).
@@ -62,7 +66,10 @@ Resources:
                 - !If
                   - ProvideOIDCProviderArn
                   - !Ref AgentOIDCProviderArn
-                  - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/${AgentOIDCProviderDomain}"
+                  - !If
+                    - ProvideOIDCProviderHardcoded
+                    - !Ref AgentOIDCProviderHardcodedArn
+                    - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/${AgentOIDCProviderDomain}"
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringLike:
@@ -147,5 +154,6 @@ Conditions:
   CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]
   ProvideOIDCProviderArn: !Not [!Equals [!Ref AgentOIDCProviderArn, ""]]
   ProvideOIDCProviderDomain: !Not [!Equals [!Ref AgentOIDCProviderDomain, ""]]
+  ProvideOIDCProviderHardcoded: !Not [!Equals [!Ref AgentOIDCProviderHardcodedArn, ""]]
   CreateOIDCRole: !Equals [!Ref AgentOIDCRoleArn, ""]
   AttachPolicyToExistingOIDCRole: !Not [!Equals [!Ref AgentOIDCRoleName, ""]]
