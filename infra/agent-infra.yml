@@ -62,7 +62,9 @@ Resources:
                   - s3:PutObject
                   - s3:GetObject
                   - s3:ListBucket
-                Resource: [!Sub arn:aws:s3:::${AgentArtifactsBucketName}, !Sub arn:aws:s3:::${AgentArtifactsBucketName}/*]
+                Resource:
+                  - !Sub "arn:aws:s3:::${AgentArtifactsBucketName}"
+                  - !Sub "arn:aws:s3:::${AgentArtifactsBucketName}/*"
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
