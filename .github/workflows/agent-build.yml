@@ -39,6 +39,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Install aws cli & jq & gh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl unzip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          sudo apt-get install -y gh
+
       - name: Acquire Lock
               - name: Install gh CLI
                 run: sudo apt-get update && sudo apt-get install -y gh
@@ -55,6 +64,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENTCORE_ROLE_ARN: ${{ secrets.AGENTCORE_ROLE_ARN }}
           AGENTCORE_RUNTIME_ID: ${{ secrets.AGENTCORE_RUNTIME_ID }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          # if AGENTCORE_RUNTIME_ID present, set USE_BEDROCK true
+          USE_BEDROCK: ${{ secrets.AGENTCORE_RUNTIME_ID != '' }}
         run: |
           # Authenticate gh CLI for PR creation
           echo "Authenticating gh CLI"

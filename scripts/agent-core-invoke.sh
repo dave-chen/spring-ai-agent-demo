@@ -19,6 +19,47 @@ mkdir -p "$ARTIFACTS_DIR"
 
 echo "Invoking AgentCore for issue ${ISSUE} on repo ${REPO} (runtime=${RUNTIME_ID}, role=${ROLE_ARN})"
 
+if [ -n "${USE_BEDROCK:-}" ] && [ -n "${RUNTIME_ID}" ]; then
+  echo "Bedrock invocation configured (runtime=${RUNTIME_ID}) — invoking model via AWS CLI"
+  # Construct a simple JSON payload requesting the agent to implement a plan
+  PAYLOAD=$(jq -n --arg issue "$ISSUE" --arg repo "$REPO" '{input: "Implement feature for issue " + $issue + " in repo " + $repo}')
+  if ! command -v aws >/dev/null 2>&1; then
+    echo "aws CLI not found; please install aws CLI or set USE_BEDROCK to empty to simulate" >&2
+    exit 2
+  fi
+  # Ensure AWS region is set
+  AWS_REGION=${AWS_REGION:-us-east-1}
+  OUTPUT=$(aws --region "$AWS_REGION" bedrock invoke-model --model-id "$RUNTIME_ID" --body "$PAYLOAD" --cli-binary-format raw-in-base64-out 2>&1) || {
+    echo "Bedrock invocation failed: $OUTPUT" >&2
+    exit 2
+  }
+  echo "Bedrock output: $OUTPUT"
+  # Save output as an artifact
+  mkdir -p "$ARTIFACTS_DIR"
+  echo "$OUTPUT" > "$ARTIFACTS_DIR/bedrock_output_issue_${ISSUE}.json"
+  echo "Done"
+  exit 0
+fi
+
+if [ -n "${CLAUDE_API_KEY:-}" ] && [ -z "${USE_BEDROCK:-}" ]; then
+  echo "Invoking Claude API for a plan"
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl not found; can't call Claude API" >&2
+    exit 2
+  fi
+  # simple payload for Claude
+  CLAUDE_PROMPT="Implement a build plan for issue ${ISSUE} in repo ${REPO}"
+  CLAUDE_ENDPOINT=${CLAUDE_API_URL:-https://api.anthropic.com/v1/complete}
+  RESPONSE=$(curl -s -X POST "$CLAUDE_ENDPOINT" \
+    -H "x-api-key: ${CLAUDE_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"claude-2.1\", \"prompt\": \"${CLAUDE_PROMPT}\", \"max_tokens\": 1000}")
+  mkdir -p "$ARTIFACTS_DIR"
+  echo "$RESPONSE" > "$ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  echo "Claude response saved to $ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  exit 0
+fi
+
 echo "Simulating agent work: generating patch, screenshot, and test results..."
 sleep 3
 

@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM role for GitHub Actions OIDC to allow minimal agent operations
+Parameters:
+  GitHubOwner:
+    Type: String
+    Description: GitHub owner/organization (owner or organization name)
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+  AgentArtifactsBucket:
+    Type: String
+    Description: Artifacts S3 bucket used by the agent
+  AgentLockTable:
+    Type: String
+    Description: DynamoDB lock table name
+  AgentQueueUrl:
+    Type: String
+    Description: SQS queue URL for job messages
+
+Resources:
+  GitHubOIDCRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "gh-actions-agent-role-${GitHubRepo}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOwner}/${GitHubRepo}:*"
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+      Policies:
+        - PolicyName: AgentActionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${AgentArtifactsBucket}
+                  - !Sub arn:aws:s3:::${AgentArtifactsBucket}/*
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt AgentQueue.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AgentLockTable}
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: '*'
+
+Outputs:
+  GitHubOIDCRoleArn:
+    Description: IAM role ARN for GitHub Actions to assume via OIDC
+    Value: !GetAtt GitHubOIDCRole.Arn
