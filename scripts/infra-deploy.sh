@@ -20,6 +20,14 @@ echo "Preparing to deploy CloudFormation stack ${STACK_NAME} in ${REGION} with a
 
 check_command aws || exit 1
 
+# Optional: run local validation (cfn-lint + AWS validate-template if available)
+if command -v cfn-lint >/dev/null 2>&1; then
+  echo "Running cfn-lint on CloudFormation templates..."
+  ./scripts/infra-validate.sh
+else
+  echo "Note: cfn-lint not found; to lint templates locally install cfn-lint (pip install --user cfn-lint)."
+fi
+
 aws cloudformation deploy \
   --template-file infra/agent-infra.yml \
   --stack-name "${STACK_NAME}" \
