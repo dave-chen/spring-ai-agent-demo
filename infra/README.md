@@ -6,10 +6,20 @@ This folder contains a simple CloudFormation template `agent-infra.yml` to creat
 - DynamoDB table for locking
 - An IAM role for the agent runtime
 
-Deploy using the helper script:
+Prerequisites:
+- Install the AWS CLI v2 (see https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+- Install cfn-lint to lint CloudFormation templates (optional): `python -m pip install --user cfn-lint`.
+
+Validate templates locally:
 
 ```
-AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123
+./scripts/infra-validate.sh
+```
+
+Deploy using the helper script (noninteractive):
+
+```
+AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
 ```
 
 The stack outputs include `AgentArtifactsBucket`, `AgentQueueUrl`, `AgentLockTable`, and `AgentRoleArn`.
