@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+out/
+/.gradle
+gradle-app.setting
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
