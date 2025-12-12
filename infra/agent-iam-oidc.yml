@@ -23,6 +23,10 @@ Parameters:
     Type: String
     Default: ""
     Description: ARN of an existing OIDC provider to use. If empty, the stack will attempt to create one.
+  AgentOIDCProviderDomain:
+    Type: String
+    Default: ""
+    Description: Optional domain for an existing OIDC provider (e.g. token.actions.githubusercontent.com). If provided, the template will build the provider ARN using the account id.
   AgentOIDCRoleArn:
     Type: String
     Default: ""
@@ -52,7 +56,13 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !If [CreateOIDCProvider, !Ref GitHubOIDCProvider, !Ref AgentOIDCProviderArn]
+              Federated: !If
+                - CreateOIDCProvider
+                - !Ref GitHubOIDCProvider
+                - !If
+                  - ProvideOIDCProviderArn
+                  - !Ref AgentOIDCProviderArn
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/${AgentOIDCProviderDomain}"
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringLike:
@@ -135,5 +145,7 @@ Outputs:
 
 Conditions:
   CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]
+  ProvideOIDCProviderArn: !Not [!Equals [!Ref AgentOIDCProviderArn, ""]]
+  ProvideOIDCProviderDomain: !Not [!Equals [!Ref AgentOIDCProviderDomain, ""]]
   CreateOIDCRole: !Equals [!Ref AgentOIDCRoleArn, ""]
   AttachPolicyToExistingOIDCRole: !Not [!Equals [!Ref AgentOIDCRoleName, ""]]

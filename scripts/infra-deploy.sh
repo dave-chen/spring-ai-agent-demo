@@ -9,6 +9,7 @@ GH_OWNER=${4:-${GITHUB_OWNER:-}}
 GH_REPO=${5:-${GITHUB_REPO:-}}
 AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
+AGENT_OIDC_PROVIDER_ARN=${12:-${AGENT_OIDC_PROVIDER_ARN:-}}
 # Optional behavior flags (env or arg7)
 # - ALLOW_EXISTING_BUCKET: if true, reuse existing S3 bucket rather than erroring
 # - DELETE_ROLLBACK_STACK: if true, delete an existing ROLLBACK_COMPLETE stack before retrying
@@ -63,6 +64,7 @@ fi
 echo "Current AWS caller identity:"
 CALLER_ARN=$(aws_cmd sts get-caller-identity --query 'Arn' --output text 2>/dev/null || true)
 aws_cmd sts get-caller-identity --output text || true
+ACCOUNT_ID=$(aws_cmd sts get-caller-identity --query 'Account' --output text || true)
 if [[ "${CALLER_ARN}" == *"AWSReservedSSO"* ]]; then
   echo "Warning: the current credentials appear to be an AWS SSO session (${CALLER_ARN}). To use a different user/profile, run: aws sso login --profile <profile> or set AWS_PROFILE=<profile> or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables." >&2
 fi
@@ -198,6 +200,47 @@ for arn in $(aws_cmd iam list-open-id-connect-providers --query 'OpenIDConnectPr
     fi
   fi
 done
+
+# If user passed AGENT_OIDC_PROVIDER_ARN or AGENT_OIDC_PROVIDER_DOMAIN via env or CLI, substitute placeholder and normalize
+if [ -n "${AGENT_OIDC_PROVIDER_ARN:-}" ]; then
+  # Replace CloudFormation placeholder if present
+  if [[ "${AGENT_OIDC_PROVIDER_ARN}" == *'${AWS::AccountId}'* ]] || [[ "${AGENT_OIDC_PROVIDER_ARN}" == *"\${AWS::AccountId}"* ]]; then
+    if [ -n "${ACCOUNT_ID}" ]; then
+      AGENT_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_ARN//\\${AWS::AccountId}/${ACCOUNT_ID}}
+      echo "Substituted AWS Account ID into AGENT_OIDC_PROVIDER_ARN: ${AGENT_OIDC_PROVIDER_ARN}"
+    else
+      echo "ERROR: Unable to resolve AWS account id for AGENT_OIDC_PROVIDER_ARN substitution" >&2
+      exit 1
+    fi
+  fi
+  # If user supplied a domain (not a full ARN), construct the provider ARN
+  if [[ "${AGENT_OIDC_PROVIDER_ARN}" != arn:aws:iam::* ]]; then
+    if [[ "${AGENT_OIDC_PROVIDER_ARN}" == *"token.actions.githubusercontent.com"* ]]; then
+      if [ -n "${ACCOUNT_ID}" ]; then
+        AGENT_OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${AGENT_OIDC_PROVIDER_ARN}"
+        echo "Normalized AGENT_OIDC_PROVIDER_ARN to ${AGENT_OIDC_PROVIDER_ARN}"
+      else
+        echo "ERROR: Unable to normalize AGENT_OIDC_PROVIDER_ARN because account ID is unknown" >&2
+        exit 1
+      fi
+    fi
+  fi
+  EXISTING_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_ARN}
+  # If user supplied the domain-only, instead pass domain param to CFN (to be constructed by template)
+  if [[ "${AGENT_OIDC_PROVIDER_ARN}" == *"token.actions.githubusercontent.com"* && "${AGENT_OIDC_PROVIDER_ARN}" != arn:aws:iam::* ]]; then
+    AGENT_OIDC_PROVIDER_DOMAIN=token.actions.githubusercontent.com
+    OIDC_PROVIDER_PARAM="AgentOIDCProviderDomain=${AGENT_OIDC_PROVIDER_DOMAIN}"
+    EXISTING_OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${AGENT_OIDC_PROVIDER_DOMAIN}"
+  else
+    OIDC_PROVIDER_PARAM="AgentOIDCProviderArn=${AGENT_OIDC_PROVIDER_ARN}"
+  fi
+fi
+
+if [ -n "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
+  OIDC_PROVIDER_PARAM="AgentOIDCProviderDomain=${AGENT_OIDC_PROVIDER_DOMAIN}"
+  # Ensure we set EXISTING_OIDC_PROVIDER_ARN for later use
+  EXISTING_OIDC_PROVIDER_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/${AGENT_OIDC_PROVIDER_DOMAIN}"
+fi
 if [ -n "$EXISTING_OIDC_PROVIDER_ARN" ]; then
   echo "Found existing OIDC provider ARN: ${EXISTING_OIDC_PROVIDER_ARN}"
 fi
@@ -245,7 +288,7 @@ if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} AgentOIDCProviderArn=${EXISTING_OIDC_PROVIDER_ARN} ${OIDC_ROLE_PARAM:-} 2>&1); then
+  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${OIDC_STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OIDC_OUTPUT" >&2
