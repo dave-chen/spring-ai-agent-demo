@@ -61,11 +61,13 @@ Deploy the infra stack (noninteractive):
 ```
 # Usage: scripts/infra-deploy.sh [STACK_NAME] [ARTIFACTS_BUCKET] [REGION] [GITHUB_OWNER] [GITHUB_REPO]
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
 
 If your AWS account restricts creation of new IAM roles, pass an existing role ARN and the stack will not create a role:
 
 ```
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name arn:aws:iam::970030241939:role/existing-agent-role
+```
 
 If you have a bucket or stack from a previous failed deploy, you can reuse the bucket and/or delete the old stack automatically:
 
@@ -75,6 +77,18 @@ If you have a bucket or stack from a previous failed deploy, you can reuse the b
 
 ```
 ALLOW_EXISTING_BUCKET=true DELETE_ROLLBACK_STACK=true AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
+
+Use a different AWS CLI profile to run the script (if you've created a new user and configured a profile):
+
+```
+AWS_PROFILE=my-new-profile AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
+
+Or, use STS to assume a role (script will use `jq` to parse assume-role output and export temporary credentials):
+
+```
+ASSUME_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/my-deploy-role AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
 ```
 ```
 ```
