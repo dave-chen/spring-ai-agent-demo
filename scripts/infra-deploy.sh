@@ -220,16 +220,18 @@ if aws_cmd iam get-role --role-name "${OIDC_ROLE_NAME}" >/dev/null 2>&1; then
     # Extract the role name from the ARN to allow attaching policies
     AGENT_OIDC_ROLE_NAME=$(echo "${AGENT_OIDC_ROLE_ARN}" | awk -F'/' '{print $NF}')
     OIDC_ROLE_PARAM="AgentOIDCRoleArn=${AGENT_OIDC_ROLE_ARN} AgentOIDCRoleName=${AGENT_OIDC_ROLE_NAME}"
-  fi
-  if [ -n "${AGENT_OIDC_ROLE_ARN}" ]; then
     # Verify the provided OIDC role ARN exists and is valid
     if ! aws_cmd iam get-role --role-name "${AGENT_OIDC_ROLE_NAME}" >/dev/null 2>&1; then
       echo "ERROR: Provided AGENT_OIDC_ROLE_ARN points to role ${AGENT_OIDC_ROLE_NAME}, but the role cannot be found. Verify the ARN and role exist in the account (or omit and let CloudFormation create the role)." >&2
       exit 1
     fi
     echo "Ensure the existing role's trust policy includes token.actions.githubusercontent.com as a federated principal to allow GitHub Actions to assume the role via OIDC."
-  fi
+  else
+    if [ "${ALLOW_EXISTING_ROLE}" = "true" ]; then
+      echo "Reusing existing OIDC role ${EXISTING_OIDC_ROLE_ARN} (ALLOW_EXISTING_ROLE=true)"
       AGENT_OIDC_ROLE_ARN=${EXISTING_OIDC_ROLE_ARN}
+      AGENT_OIDC_ROLE_NAME=$(echo "${AGENT_OIDC_ROLE_ARN}" | awk -F'/' '{print $NF}')
+      OIDC_ROLE_PARAM="AgentOIDCRoleArn=${AGENT_OIDC_ROLE_ARN} AgentOIDCRoleName=${AGENT_OIDC_ROLE_NAME}"
     else
       echo "Note: OIDC role ${OIDC_ROLE_NAME} exists but ALLOW_EXISTING_ROLE is not set; deploy will attempt to create or error depending on permissions."
     fi
