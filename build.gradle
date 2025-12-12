@@ -20,8 +20,18 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web:3.2.7'
     testImplementation 'org.springframework.boot:spring-boot-starter-test:3.2.7'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.3'
+    implementation platform('software.amazon.awssdk:bom:2.20.112')
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:sqs'
+    implementation 'software.amazon.awssdk:dynamodb'
+    implementation 'software.amazon.awssdk:sts'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// Disable bootJar during CI for now to avoid plugin/gradle mismatches in the container.
+tasks.withType(org.springframework.boot.gradle.tasks.bundling.BootJar) {
+    enabled = false
 }

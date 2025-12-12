@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Agent infra stack — S3, SQS FIFO, DynamoDB, and IAM role for Bedrock/agents
+Parameters:
+  AgentArtifactsBucketName:
+    Type: String
+    Description: S3 bucket name to store agent artifacts
+  AgentLockTableName:
+    Type: String
+    Default: AgentLockTable
+  AgentQueueName:
+    Type: String
+    Default: agent-queue.fifo
+
+Resources:
+  AgentArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AgentArtifactsBucketName
+      VersioningConfiguration:
+        Status: Enabled
+
+  AgentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Ref AgentQueueName
+      FifoQueue: true
+      ContentBasedDeduplication: true
+
+  AgentLockTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref AgentLockTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: lockKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: lockKey
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  AgentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "agent-runtime-role-${AWS::StackName}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com, ecs-tasks.amazonaws.com, lambda.amazonaws.com]
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: agent-runtime-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource: [!Sub arn:aws:s3:::${AgentArtifactsBucketName}, !Sub arn:aws:s3:::${AgentArtifactsBucketName}/*]
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt AgentQueue.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AgentLockTableName}
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource: '*'
+
+Outputs:
+  AgentArtifactsBucket:
+    Description: Artifacts S3 bucket
+    Value: !Ref AgentArtifactsBucket
+  AgentQueueUrl:
+    Description: SQS FIFO queue URL
+    Value: !Ref AgentQueue
+  AgentLockTable:
+    Description: DynamoDB lock table name
+    Value: !Ref AgentLockTable
+  AgentRoleArn:
+    Description: Agent runtime role ARN
+    Value: !GetAtt AgentRole.Arn

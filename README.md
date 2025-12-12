@@ -33,3 +33,19 @@ Notes:
 - This first implementation adds the skeleton workflows and scripts; you need to provide suppying secrets and an AWS role/permissions for assuming role via OIDC.
 - Integration with AWS Bedrock AgentCore and Claude SDK will be added in subsequent steps — placeholders are in `scripts/agent-build.sh`.
 
+Deploy infra (example):
+
+```
+# Create an artifacts bucket and deploy the infra stack
+AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123
+```
+
+CloudFormation outputs will provide `AgentRoleArn`, `AgentArtifactsBucket`, `AgentQueueUrl`, and `AgentLockTable` names.
+
+Set the following repo secrets (or store in AWS Secrets Manager) before running workflows:
+- `AWS_REGION`
+- `AWS_OIDC_ROLE_TO_ASSUME` (or use `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` temporarily)
+- `AGENT_APPROVERS` (comma-separated logins allowed to approve)
+- `AGENTCORE_RUNTIME_ID` and `AGENTCORE_ROLE_ARN`
+
+
