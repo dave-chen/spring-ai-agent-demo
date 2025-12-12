@@ -15,6 +15,7 @@ from urllib.parse import quote_plus
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 REPO = os.environ.get("REPO")
 APPROVERS = os.environ.get("AGENT_APPROVERS", "").split(",") if os.environ.get("AGENT_APPROVERS") else []
+APPROVER_TEAMS = os.environ.get("AGENT_APPROVER_TEAMS", "").split(",") if os.environ.get("AGENT_APPROVER_TEAMS") else []
 
 if not GITHUB_TOKEN or not REPO:
     print("Please set GITHUB_TOKEN and REPO environment variables.")
@@ -55,10 +56,25 @@ def dispatch_build(issue_number, votes):
     print(f"Dispatched build for issue #{issue_number}")
 
 def is_authorized(reaction_user):
-    if not APPROVERS:
-        # If no approvers set, allow any user for demo
+    if not APPROVERS and not APPROVER_TEAMS:
+        # If neither approvers nor teams set, allow any user for demo
         return True
-    return reaction_user in APPROVERS
+    if reaction_user in APPROVERS:
+        return True
+    # Check team membership via GitHub API if teams are configured
+    for team in APPROVER_TEAMS:
+        if '/' in team:
+            org, slug = team.split('/', 1)
+            try:
+                url = f"{API}/orgs/{org}/teams/{slug}/memberships/{reaction_user}"
+                r = requests.get(url, headers=HEADERS)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get('state') == 'active':
+                        return True
+            except Exception:
+                pass
+    return False
 
 def main():
     issues = get_autobuild_issues()

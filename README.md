@@ -48,6 +48,33 @@ Set the following repo secrets (or store in AWS Secrets Manager) before running 
 - `AGENT_APPROVERS` (comma-separated logins allowed to approve)
 - `AGENTCORE_RUNTIME_ID` and `AGENTCORE_ROLE_ARN`
 
+Secrets matrix (example):
+ - `AWS_REGION=us-east-1`
+ - `AGENT_APPROVERS=alice,bob` (user logins)
+ - `AGENT_APPROVER_TEAMS=org1/core-team,org1/infra-team` (org/team_slug pairs)
+ - `AGENT_ARTIFACTS_BUCKET` (S3 bucket), `AGENT_QUEUE_URL`, `LOCK_TABLE_NAME`
+ - `CLAUDE_API_KEY` (if using Claude directly)
+ - `AGENTCORE_RUNTIME_ID` and `AGENTCORE_ROLE_ARN` (if using Bedrock)
+ - `AWS_OIDC_ROLE_TO_ASSUME` (role to assume in Actions via OIDC)
+ - `CLOUDFRONT_DIST_ID` (optional)
+
+CloudFormation deploy commands (example):
+
+```
+# 1) Deploy agent infra (S3, SQS, DynamoDB, IAM role)
+AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123
+
+# 2) Deploy OIDC role stack (this runs automatically in infra-deploy.sh)
+# Outputs will be printed that include: AgentArtifactsBucket, AgentQueueUrl, AgentLockTable, AgentRoleArn, GitHubOIDCRoleArn
+
+# 3) Copy outputs into GitHub secrets (or use OIDC for AWS creds):
+# - AGENT_ARTIFACTS_BUCKET=MyArtifactsBucketName
+# - AGENT_QUEUE_URL=sqs://example
+# - LOCK_TABLE_NAME=AgentLockTable
+# - AWS_OIDC_ROLE_TO_ASSUME=arn:aws:iam::<account-id>:role/gh-actions-agent-role-<repo>
+# - AGENT_APPROVER_TEAMS=org1/team1,org1/team2
+```
+
 Triggering agent manually (local dev):
 
 ```
@@ -57,6 +84,8 @@ Triggering agent manually (local dev):
 # Trigger an agent build via HTTP API (requires app running on port 8080)
 curl -X POST "http://localhost:8080/api/agent/build?issue=123&repo=dave-chen/spring-ai-agent-demo"
 ```
+
+GitHub token and permissions: Ensure `GITHUB_TOKEN` or your selected token has `read:org` permission (or install a GitHub App) so the poller can validate team membership for approvals.
 
 
 

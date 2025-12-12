@@ -12,6 +12,7 @@ jobs:
       issues: write
       repository_dispatch: write
       id-token: write
+      organization: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +31,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENT_APPROVERS: ${{ secrets.AGENT_APPROVERS }} # comma separated logins
+          AGENT_APPROVER_TEAMS: ${{ secrets.AGENT_APPROVER_TEAMS }} # comma separated org/team_slug pairs
           REPO: ${{ github.repository }}
         run: |
           python scripts/issue-poller.py
