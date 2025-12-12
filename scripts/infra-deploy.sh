@@ -19,6 +19,7 @@ check_command() {
 echo "Preparing to deploy CloudFormation stack ${STACK_NAME} in ${REGION} with artifacts bucket ${ARTIFACTS_BUCKET}"
 
 check_command aws || exit 1
+check_command jq || echo "Note: jq not found; install to improve JSON output parsing (apt install -y jq)"
 
 # Ensure AWS CLI has credentials and we can call STS
 if ! aws sts get-caller-identity --output text >/dev/null 2>&1; then
@@ -35,8 +36,30 @@ else
 fi
 
 echo "Deploying CloudFormation stack ${STACK_NAME} in ${REGION}"
+
+# Pre-deploy checks: S3 bucket / SQS queue / IAM role conflicts
+echo "Checking for resource name conflicts before deploy..."
+# S3 bucket check
+if aws s3api head-bucket --bucket "${ARTIFACTS_BUCKET}" >/dev/null 2>&1; then
+  echo "ERROR: The S3 bucket ${ARTIFACTS_BUCKET} already exists. Choose a different bucket name (globally unique), or delete the existing bucket if you want CloudFormation to manage it." >&2
+  echo "You can check the bucket with: aws s3 ls s3://${ARTIFACTS_BUCKET} --recursive --human-readable || true" >&2
+  exit 1
+fi
+# SQS queue check (fifo name must end with .fifo)
+if queue_url=$(aws sqs get-queue-url --queue-name "${AgentQueueName:-agent-queue.fifo}" --region "${REGION}" 2>/dev/null || true); then
+  if [[ -n "$queue_url" ]]; then
+    echo "ERROR: The SQS queue ${AgentQueueName:-agent-queue.fifo} already exists (${queue_url}). Choose a different name or allow CloudFormation to create a new queue name." >&2
+    exit 1
+  fi
+fi
+# IAM role check (if role with the same name exists it will cause a create failure)
+ROLE_NAME="agent-runtime-role-${STACK_NAME}"
+if aws iam get-role --role-name "${ROLE_NAME}" >/dev/null 2>&1; then
+  echo "ERROR: IAM role ${ROLE_NAME} already exists in the account; CloudFormation will not take ownership. Choose a different name, or delete the existing role if appropriate." >&2
+  exit 1
+fi
 DEPLOY_OUTPUT=""
-if ! DEPLOY_OUTPUT=$(aws cloudformation deploy \
+  if ! DEPLOY_OUTPUT=$(aws cloudformation deploy \
   --template-file infra/agent-infra.yml \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
@@ -48,7 +71,11 @@ if ! DEPLOY_OUTPUT=$(aws cloudformation deploy \
   # If stack exists, show events to help debug; otherwise advise on typical reasons
   if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${REGION}" >/dev/null 2>&1; then
     echo "--- CloudFormation stack events (recent) ---" >&2
-    aws cloudformation describe-stack-events --stack-name "${STACK_NAME}" --region "${REGION}" --max-items 20 --output json >&2 || true
+    aws cloudformation describe-stack-events --stack-name "${STACK_NAME}" --region "${REGION}" --max-items 50 --output json >&2 || true
+    if command -v jq >/dev/null 2>&1; then
+      echo "--- First FAILURE event ---" >&2
+      aws cloudformation describe-stack-events --stack-name "${STACK_NAME}" --region "${REGION}" --max-items 50 --output json | jq -r '.StackEvents[] | select(.ResourceStatus | contains("FAILED")) | "Resource: \(.LogicalResourceId) (\(.ResourceType)) => \(.ResourceStatus): \(.ResourceStatusReason)"' | head -n 5 >&2 || true
+    fi
   else
     echo "Stack ${STACK_NAME} does not exist after deploy; ensure you have CreateStack permissions and the AWS account/region is correct." >&2
   fi
