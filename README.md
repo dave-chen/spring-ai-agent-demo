@@ -35,9 +35,32 @@ Notes:
 
 Deploy infra (example):
 
+Prerequisites:
+- Install the AWS CLI v2 (see https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html). On Ubuntu you can use:
+
 ```
-# Create an artifacts bucket and deploy the infra stack
-AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+```
+
+- Install cfn-lint to lint CloudFormation templates (optional but recommended):
+
+```
+python -m pip install --user cfn-lint
+```
+
+Validate templates locally (optional):
+
+```
+./scripts/infra-validate.sh
+```
+
+Deploy the infra stack (noninteractive):
+
+```
+# Usage: scripts/infra-deploy.sh [STACK_NAME] [ARTIFACTS_BUCKET] [REGION] [GITHUB_OWNER] [GITHUB_REPO]
+AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
 ```
 
 CloudFormation outputs will provide `AgentRoleArn`, `AgentArtifactsBucket`, `AgentQueueUrl`, and `AgentLockTable` names.
