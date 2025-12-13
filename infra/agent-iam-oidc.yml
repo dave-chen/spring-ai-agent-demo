@@ -35,6 +35,13 @@ Parameters:
     Type: String
     Default: ""
     Description: Name of an existing GitHub OIDC role to attach policies to (when using AgentOIDCRoleArn).
+  SkipOIDCRole:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: If true, do not create the GitHubOIDCRole resource in this stack.
   AgentOIDCProviderHardcodedArn:
     Type: String
     Default: ""
@@ -165,7 +172,7 @@ Outputs:
 Conditions:
   CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]
   ProvideOIDCProviderArn: !Not [!Equals [!Ref AgentOIDCProviderArn, ""]]
-  # ProvideOIDCProviderDomain: removed — not required (domain param used directly)
   ProvideOIDCProviderHardcoded: !Not [!Equals [!Ref AgentOIDCProviderHardcodedArn, ""]]
-  CreateOIDCRole: !Equals [!Ref AgentOIDCRoleArn, ""]
+  ShouldCreateOIDCRoleParam: !Equals [!Ref SkipOIDCRole, "false"]
+  CreateOIDCRole: !And [!Equals [!Ref AgentOIDCRoleArn, ""], !Ref ShouldCreateOIDCRoleParam]
   AttachPolicyToExistingOIDCRole: !Not [!Equals [!Ref AgentOIDCRoleName, ""]]
