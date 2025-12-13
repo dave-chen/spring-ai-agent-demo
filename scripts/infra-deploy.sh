@@ -359,7 +359,7 @@ for varname in AGENT_OIDC_PROVIDER_ARN AGENT_OIDC_PROVIDER_HARDCODED_ARN AGENT_O
 done
 
 # DRY RUN: create and preview a change set for the OIDC stack rather than deploying it
-if [ "${DRY_RUN,,}" = "true" ]; then
+if [ "$(echo "${DRY_RUN}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
   echo "DRY_RUN is enabled: will create a CloudFormation change set for ${OIDC_STACK_NAME} and print proposed changes"
   # Determine change set type
   if aws_cmd cloudformation describe-stacks --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" >/dev/null 2>&1; then
