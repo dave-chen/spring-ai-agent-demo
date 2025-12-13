@@ -11,13 +11,39 @@ AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
 AGENT_OIDC_PROVIDER_ARN=${12:-${AGENT_OIDC_PROVIDER_ARN:-}}
 AGENT_OIDC_PROVIDER_HARDCODED_ARN=${13:-${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}}
+# Optional: DRY_RUN (14th) and SKIP_OIDC_STACK (15th)
 DRY_RUN=${DRY_RUN:-${14:-false}}
+SKIP_OIDC_STACK=${SKIP_OIDC_STACK:-${15:-false}}
 # Default to the provided OIDC provider ARN for convenience if no value was passed
 # NOTE: Replace or remove this default for general public use; this value is account-specific.
 if [ -z "${AGENT_OIDC_PROVIDER_ARN:-}" ] && [ -z "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
   AGENT_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_ARN:-arn:aws:iam::970030241939:oidc-provider/token.actions.githubusercontent.com}
   echo "Using default AGENT_OIDC_PROVIDER_ARN=${AGENT_OIDC_PROVIDER_ARN} (from script defaults)"
 fi
+
+# If user or detection set an existing OIDC role, validate its assume role policy includes GitHub OIDC
+if [ -n "${AGENT_OIDC_ROLE_ARN:-}" ]; then
+  if [ -z "${AGENT_OIDC_ROLE_NAME:-}" ]; then
+    AGENT_OIDC_ROLE_NAME=$(echo "${AGENT_OIDC_ROLE_ARN}" | awk -F'/' '{print $NF}')
+  fi
+  echo "Validating assume-role policy on existing OIDC role: ${AGENT_OIDC_ROLE_NAME}"
+  AS_POLICY=$(aws_cmd iam get-role --role-name "${AGENT_OIDC_ROLE_NAME}" --query 'Role.AssumeRolePolicyDocument' --output json 2>/dev/null || true)
+  if [ -n "${AS_POLICY}" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      contains=$(echo "${AS_POLICY}" | jq -r '.Statement[]?.Principal?.Federated // empty' | grep -Eo "token.actions.githubusercontent.com" || true)
+      if [ -n "${contains}" ]; then
+        echo "Existing role trust policy contains token.actions.githubusercontent.com; proceeding to reuse the role."
+      else
+        echo "WARNING: Existing role ${AGENT_OIDC_ROLE_NAME} trust policy does NOT appear to include token.actions.githubusercontent.com." >&2
+      fi
+    else
+      if echo "${AS_POLICY}" | grep -q "token.actions.githubusercontent.com"; then
+        echo "Existing role trust policy contains token.actions.githubusercontent.com; proceeding to reuse the role."
+      else
+        echo "WARNING: Existing role ${AGENT_OIDC_ROLE_NAME} trust policy does NOT appear to include token.actions.githubusercontent.com." >&2
+      fi
+    fi
+  fi
 # Optional behavior flags (env or arg7)
 # - ALLOW_EXISTING_BUCKET: if true, reuse existing S3 bucket rather than erroring
 # - DELETE_ROLLBACK_STACK: if true, delete an existing ROLLBACK_COMPLETE stack before retrying
@@ -314,20 +340,24 @@ if aws_cmd iam get-role --role-name "${OIDC_ROLE_NAME}" >/dev/null 2>&1; then
       exit 1
     fi
     echo "Ensure the existing role's trust policy includes token.actions.githubusercontent.com as a federated principal to allow GitHub Actions to assume the role via OIDC."
-  else
-    if [ "${ALLOW_EXISTING_ROLE}" = "true" ]; then
-      echo "Reusing existing OIDC role ${EXISTING_OIDC_ROLE_ARN} (ALLOW_EXISTING_ROLE=true)"
+    else
+      # Auto-reuse the existing OIDC role we detected (reduce friction for manual pre-provisioning)
+      echo "Auto-using existing OIDC role ${EXISTING_OIDC_ROLE_ARN} (detected)"
       AGENT_OIDC_ROLE_ARN=${EXISTING_OIDC_ROLE_ARN}
       AGENT_OIDC_ROLE_NAME=$(echo "${AGENT_OIDC_ROLE_ARN}" | awk -F'/' '{print $NF}')
       OIDC_ROLE_PARAM="AgentOIDCRoleArn=${AGENT_OIDC_ROLE_ARN} AgentOIDCRoleName=${AGENT_OIDC_ROLE_NAME}"
-    else
-      echo "Note: OIDC role ${OIDC_ROLE_NAME} exists but ALLOW_EXISTING_ROLE is not set; deploy will attempt to create or error depending on permissions."
+      if [ "${ALLOW_EXISTING_ROLE}" != "true" ]; then
+        echo "Note: ALLOW_EXISTING_ROLE is not set, but script will reuse the detected OIDC role. Set ALLOW_EXISTING_ROLE=false to attempt creation instead."
+      fi
     fi
   fi
 fi
 
-echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
-DEPLOY_OIDC_OUTPUT=""
+if [ "$(echo "${SKIP_OIDC_STACK}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+  echo "SKIP_OIDC_STACK=true: Skipping GitHub OIDC role stack deployment"
+else
+  echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
+  DEPLOY_OIDC_OUTPUT=""
 echo "CloudFormation parameters for OIDC stack: GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-}"
 
 # Compute the federated principal we intend to use for the IAM Role (helpful preview and validation)
@@ -393,7 +423,7 @@ if [ "$(echo "${DRY_RUN}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
   echo "DRY_RUN: preview complete; exiting without deploying." 
   exit 0
 fi
-if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
+  if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --template-file infra/agent-iam-oidc.yml \
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
@@ -409,6 +439,7 @@ if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
     echo "Stack ${OIDC_STACK_NAME} does not exist after deploy. Check permissions and role trust settings." >&2
   fi
   exit 2
+  fi
 fi
 
 echo "OIDC stack deploy complete"
