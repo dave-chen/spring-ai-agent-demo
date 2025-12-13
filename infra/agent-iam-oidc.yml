@@ -30,15 +30,15 @@ Parameters:
   AgentOIDCRoleArn:
     Type: String
     Default: ""
-    Description: ARN of an existing GitHub OIDC role to use. If empty, the stack will create a new role named gh-actions-agent-role-${GitHubRepo}.
+    Description: ARN of an existing GitHub OIDC role to use. If empty, the stack will create a new role named gh-actions-agent-role-<repo>.
   AgentOIDCRoleName:
-      AgentOIDCProviderHardcodedArn:
-        Type: String
-        Default: ""
-        Description: "(Debug) Hardcoded OIDC provider ARN to use for federated principal (e.g. arn:aws:iam::970030241939:oidc-provider/token.actions.githubusercontent.com). Only used if provided."
     Type: String
     Default: ""
     Description: Name of an existing GitHub OIDC role to attach policies to (when using AgentOIDCRoleArn).
+  AgentOIDCProviderHardcodedArn:
+    Type: String
+    Default: ""
+    Description: "(Debug) Hardcoded OIDC provider ARN to use for federated principal (e.g. arn:aws:iam::970030241939:oidc-provider/token.actions.githubusercontent.com). Only used if provided."
 
 Resources:
   GitHubOIDCProvider:
@@ -69,7 +69,7 @@ Resources:
                   - !If
                     - ProvideOIDCProviderHardcoded
                     - !Ref AgentOIDCProviderHardcodedArn
-                    - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/${AgentOIDCProviderDomain}"
+                    - !Ref AgentOIDCProviderDomain
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringLike:
@@ -165,7 +165,7 @@ Outputs:
 Conditions:
   CreateOIDCProvider: !Equals [!Ref AgentOIDCProviderArn, ""]
   ProvideOIDCProviderArn: !Not [!Equals [!Ref AgentOIDCProviderArn, ""]]
-  ProvideOIDCProviderDomain: !Not [!Equals [!Ref AgentOIDCProviderDomain, ""]]
+  # ProvideOIDCProviderDomain: removed — not required (domain param used directly)
   ProvideOIDCProviderHardcoded: !Not [!Equals [!Ref AgentOIDCProviderHardcodedArn, ""]]
   CreateOIDCRole: !Equals [!Ref AgentOIDCRoleArn, ""]
   AttachPolicyToExistingOIDCRole: !Not [!Equals [!Ref AgentOIDCRoleName, ""]]

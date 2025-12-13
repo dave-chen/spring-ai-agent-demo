@@ -11,6 +11,7 @@ AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
 AGENT_OIDC_PROVIDER_ARN=${12:-${AGENT_OIDC_PROVIDER_ARN:-}}
 AGENT_OIDC_PROVIDER_HARDCODED_ARN=${13:-${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}}
+DRY_RUN=${DRY_RUN:-${14:-false}}
 # Default to the provided OIDC provider ARN for convenience if no value was passed
 # NOTE: Replace or remove this default for general public use; this value is account-specific.
 if [ -z "${AGENT_OIDC_PROVIDER_ARN:-}" ] && [ -z "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
@@ -328,6 +329,70 @@ fi
 echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
 DEPLOY_OIDC_OUTPUT=""
 echo "CloudFormation parameters for OIDC stack: GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-}"
+
+# Compute the federated principal we intend to use for the IAM Role (helpful preview and validation)
+FEDERATED_PRINCIPAL=""
+if [ -n "${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}" ]; then
+  FEDERATED_PRINCIPAL=${AGENT_OIDC_PROVIDER_HARDCODED_ARN}
+elif [ -n "${AGENT_OIDC_PROVIDER_ARN:-}" ]; then
+  FEDERATED_PRINCIPAL=${AGENT_OIDC_PROVIDER_ARN}
+elif [ -n "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
+  FEDERATED_PRINCIPAL=${AGENT_OIDC_PROVIDER_DOMAIN}
+elif [ -n "${EXISTING_OIDC_PROVIDER_ARN:-}" ]; then
+  FEDERATED_PRINCIPAL=${EXISTING_OIDC_PROVIDER_ARN}
+else
+  # Assume we will create a provider in this account (domain token.actions.githubusercontent.com)
+  if [ -n "${ACCOUNT_ID}" ]; then
+    FEDERATED_PRINCIPAL="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+  fi
+fi
+echo "Federated principal that will be used for the role assume policy: ${FEDERATED_PRINCIPAL}"
+
+# Ensure no unresolved CloudFormation placeholder remains in parameters or ARNs
+for varname in AGENT_OIDC_PROVIDER_ARN AGENT_OIDC_PROVIDER_HARDCODED_ARN AGENT_OIDC_PROVIDER_DOMAIN AGENT_OIDC_ROLE_ARN AGENT_ROLE_ARN; do
+  eval val="\"\${${varname}:-}\""
+  if [[ "${val}" == *'${AWS::AccountId}'* || "${val}" == *"\$\{AWS::AccountId\}"* ]]; then
+    echo "ERROR: Parameter ${varname} contains an unresolved \\${AWS::AccountId} placeholder: ${val}" >&2
+    echo "Please substitute the account id (script will substitute if AWS credentials available), or pass domain-only (AGENT_OIDC_PROVIDER_DOMAIN) or an explicit ARN (AGENT_OIDC_PROVIDER_HARDCODED_ARN)." >&2
+    exit 1
+  fi
+done
+
+# DRY RUN: create and preview a change set for the OIDC stack rather than deploying it
+if [ "${DRY_RUN,,}" = "true" ]; then
+  echo "DRY_RUN is enabled: will create a CloudFormation change set for ${OIDC_STACK_NAME} and print proposed changes"
+  # Determine change set type
+  if aws_cmd cloudformation describe-stacks --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" >/dev/null 2>&1; then
+    CHANGESET_TYPE=UPDATE
+  else
+    CHANGESET_TYPE=CREATE
+  fi
+  CS_NAME="preview-${OIDC_STACK_NAME}-$(date +%s)"
+  echo "Creating change set ${CS_NAME} (Type: ${CHANGESET_TYPE})..."
+  # Build parameter overrides list for create-change-set
+  PARAMS=(ParameterKey=GitHubOwner,ParameterValue=${GH_OWNER} ParameterKey=GitHubRepo,ParameterValue=${GH_REPO} ParameterKey=AgentArtifactsBucket,ParameterValue=${AGENT_ARTIFACTS_BUCKET} ParameterKey=AgentLockTable,ParameterValue=${AGENT_LOCK_TABLE} ParameterKey=AgentQueueUrl,ParameterValue=${AGENT_QUEUE_URL} ParameterKey=AgentQueueArn,ParameterValue=${AGENT_QUEUE_ARN})
+  if [ -n "${OIDC_PROVIDER_PARAM:-}" ]; then
+    IFS='=' read -r pk pv <<<"${OIDC_PROVIDER_PARAM}"
+    PARAMS+=(ParameterKey=${pk},ParameterValue=${pv})
+  fi
+  if [ -n "${OIDC_ROLE_PARAM:-}" ]; then
+    # OIDC_ROLE_PARAM may contain two params
+    for kv in ${OIDC_ROLE_PARAM}; do
+      IFS='=' read -r pk pv <<<"${kv}"
+      PARAMS+=(ParameterKey=${pk},ParameterValue=${pv})
+    done
+  fi
+  CREATE_OUTPUT=$(aws_cmd cloudformation create-change-set --change-set-name "${CS_NAME}" --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" --change-set-type ${CHANGESET_TYPE} --capabilities CAPABILITY_NAMED_IAM --template-body file://infra/agent-iam-oidc.yml --parameters "${PARAMS[@]}" 2>&1) || { echo "ERROR: failed to create change set: ${CREATE_OUTPUT}" >&2; exit 1; }
+  echo "Waiting for change set to be created..."
+  # Wait for completion (success or failed)
+  aws_cmd cloudformation wait change-set-create-complete --change-set-name "${CS_NAME}" --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" || true
+  echo "Change set description:" && aws_cmd cloudformation describe-change-set --change-set-name "${CS_NAME}" --stack-name "${OIDC_STACK_NAME}" --region "${REGION}"
+  echo "Change set changes (summary):" && aws_cmd cloudformation describe-change-set --change-set-name "${CS_NAME}" --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" --query 'Changes[].ResourceChange' --output json
+  echo "Deleting preview change set ${CS_NAME}..."
+  aws_cmd cloudformation delete-change-set --change-set-name "${CS_NAME}" --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" || true
+  echo "DRY_RUN: preview complete; exiting without deploying." 
+  exit 0
+fi
 if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --template-file infra/agent-iam-oidc.yml \
   --stack-name "${OIDC_STACK_NAME}" \

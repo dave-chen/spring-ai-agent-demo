@@ -63,6 +63,19 @@ Deploy the infra stack (noninteractive):
 AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
 ```
 
+Dry-run preview
+----------------
+
+If you want to inspect the CloudFormation changes without deploying them, set `DRY_RUN=true` to create an on-account CloudFormation change-set for the OIDC role stack, print the proposed changes, and then delete the change-set without applying it. This helps validate the generated `AssumeRolePolicyDocument` and the `Federated` principal string before running the full deploy.
+
+Example:
+
+```
+DRY_RUN=true AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
+
+Tip: the script will subtotal and print the exact CloudFormation parameters (AgentOIDCProviderArn, AgentOIDCProviderDomain, etc.) used for the OIDC stack and will reject unresolved `${AWS::AccountId}` placeholders before creating the change-set.
+
 If your AWS account restricts creation of new IAM roles, pass an existing role ARN and the stack will not create a role:
 
 ```
