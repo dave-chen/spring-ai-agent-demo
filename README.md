@@ -76,6 +76,17 @@ DRY_RUN=true AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my
 
 Tip: the script will subtotal and print the exact CloudFormation parameters (AgentOIDCProviderArn, AgentOIDCProviderDomain, etc.) used for the OIDC stack and will reject unresolved `${AWS::AccountId}` placeholders before creating the change-set.
 
+Skip OIDC stack (manual provider/role created)
+----------------------------------------------
+
+If you have manually created the GitHub OIDC provider and/or the `gh-actions-agent-role-<repo>` role in the account, set `SKIP_OIDC_STACK=true` to skip the OIDC stack deployment entirely. The script will still deploy the main infra (S3, SQS, DynamoDB) and will auto-detect an existing `gh-actions-agent-role-<repo>` role to reuse (it will also verify the role's trust policy for token.actions.githubusercontent.com and warn if it's not present).
+
+Example (manual role and provider already created):
+
+```
+SKIP_OIDC_STACK=true AWS_REGION=us-east-1 ./scripts/infra-deploy.sh agent-infra-stack my-agent-artifacts-bucket-unique-123 org-name repo-name
+```
+
 If your AWS account restricts creation of new IAM roles, pass an existing role ARN and the stack will not create a role:
 
 ```
