@@ -354,7 +354,15 @@ if aws_cmd iam get-role --role-name "${OIDC_ROLE_NAME}" >/dev/null 2>&1; then
 fi
 
 if [ "$(echo "${SKIP_OIDC_STACK}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
-  echo "SKIP_OIDC_STACK=true: Skipping GitHub OIDC role stack deployment"
+  echo "SKIP_OIDC_STACK=true: Skipping all OIDC stack actions (no DRY_RUN, no deploy)"
+  echo "CloudFormation stacks deployed. Outputs:"
+  if aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${REGION} >/dev/null 2>&1; then
+    echo "Stack outputs for ${STACK_NAME}:"
+    aws_cmd cloudformation describe-stacks --stack-name ${STACK_NAME} --query 'Stacks[0].Outputs' --region ${REGION}
+  else
+    echo "No stack outputs: ${STACK_NAME} doesn't exist in ${REGION}" >&2
+  fi
+  exit 0
 else
   echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
   DEPLOY_OIDC_OUTPUT=""
