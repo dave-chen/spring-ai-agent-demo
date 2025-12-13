@@ -266,6 +266,29 @@ if [ -n "$EXISTING_OIDC_PROVIDER_ARN" ]; then
   echo "Found existing OIDC provider ARN: ${EXISTING_OIDC_PROVIDER_ARN}"
 fi
 
+# Substitute a literal ${AWS::AccountId} placeholder in commonly provided env vars
+substitute_account_placeholder() {
+  local name="$1"
+  eval local_value="\"\${${name}:-}\""
+  if [[ -n "${local_value}" && ( "${local_value}" == *'${AWS::AccountId}'* || "${local_value}" == *"\${AWS::AccountId}"* ) ]]; then
+    if [[ -n "${ACCOUNT_ID}" ]]; then
+      local_value=${local_value//\${AWS::AccountId}/${ACCOUNT_ID}}
+      eval ${name}="\"${local_value}\""
+      echo "Substituted \${AWS::AccountId} into ${name}: ${local_value}"
+    else
+      echo "ERROR: Unable to resolve AWS account id for ${name} substitution" >&2
+      exit 1
+    fi
+  fi
+}
+
+# Sanitize values that may be passed as params
+substitute_account_placeholder AGENT_OIDC_PROVIDER_ARN
+substitute_account_placeholder AGENT_OIDC_PROVIDER_HARDCODED_ARN
+substitute_account_placeholder AGENT_OIDC_PROVIDER_DOMAIN
+substitute_account_placeholder AGENT_ROLE_ARN
+substitute_account_placeholder AGENT_OIDC_ROLE_ARN
+
 # Accept owner/repo from CLI args, environment, or interactive prompt
 if [[ -z "${GH_OWNER}" ]]; then
   read -p "Enter GitHub owner (user or org): " GH_OWNER
@@ -304,6 +327,7 @@ fi
 
 echo "Deploying GitHub OIDC role stack ${OIDC_STACK_NAME} in ${REGION}"
 DEPLOY_OIDC_OUTPUT=""
+echo "CloudFormation parameters for OIDC stack: GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-}"
 if ! DEPLOY_OIDC_OUTPUT=$(aws_cmd cloudformation deploy \
   --template-file infra/agent-iam-oidc.yml \
   --stack-name "${OIDC_STACK_NAME}" \
