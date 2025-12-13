@@ -11,9 +11,10 @@ AGENT_ROLE_ARN=${6:-${AGENT_ROLE_ARN:-}}
 AGENT_OIDC_ROLE_ARN=${11:-${AGENT_OIDC_ROLE_ARN:-}}
 AGENT_OIDC_PROVIDER_ARN=${12:-${AGENT_OIDC_PROVIDER_ARN:-}}
 AGENT_OIDC_PROVIDER_HARDCODED_ARN=${13:-${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}}
-# Optional: DRY_RUN (14th) and SKIP_OIDC_STACK (15th)
+# Optional: DRY_RUN (14th), SKIP_OIDC_STACK (15th), SKIP_OIDC_ROLE (16th)
 DRY_RUN=${DRY_RUN:-${14:-false}}
 SKIP_OIDC_STACK=${SKIP_OIDC_STACK:-${15:-false}}
+SKIP_OIDC_ROLE=${SKIP_OIDC_ROLE:-${16:-false}}
 # Default to the provided OIDC provider ARN for convenience if no value was passed
 # NOTE: Replace or remove this default for general public use; this value is account-specific.
 if [ -z "${AGENT_OIDC_PROVIDER_ARN:-}" ] && [ -z "${AGENT_OIDC_PROVIDER_DOMAIN:-}" ]; then
@@ -368,6 +369,13 @@ else
   DEPLOY_OIDC_OUTPUT=""
 echo "CloudFormation parameters for OIDC stack: GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-}"
 
+# Build OIDC role skip parameter if requested
+SKIP_ROLE_PARAM=""
+if [ "$(echo "${SKIP_OIDC_ROLE}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
+  SKIP_ROLE_PARAM="SkipOIDCRole=true"
+  echo "SKIP_OIDC_ROLE=true: Will pass SkipOIDCRole=true to CloudFormation (GitHubOIDCRole will not be created)"
+fi
+
 # Compute the federated principal we intend to use for the IAM Role (helpful preview and validation)
 FEDERATED_PRINCIPAL=""
 if [ -n "${AGENT_OIDC_PROVIDER_HARDCODED_ARN:-}" ]; then
@@ -420,6 +428,9 @@ if [ "$(echo "${DRY_RUN}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then
       PARAMS+=(ParameterKey=${pk},ParameterValue=${pv})
     done
   fi
+  if [ -n "${SKIP_ROLE_PARAM:-}" ]; then
+    PARAMS+=(ParameterKey=SkipOIDCRole,ParameterValue=true)
+  fi
   CREATE_OUTPUT=$(aws_cmd cloudformation create-change-set --change-set-name "${CS_NAME}" --stack-name "${OIDC_STACK_NAME}" --region "${REGION}" --change-set-type ${CHANGESET_TYPE} --capabilities CAPABILITY_NAMED_IAM --template-body file://infra/agent-iam-oidc.yml --parameters "${PARAMS[@]}" 2>&1) || { echo "ERROR: failed to create change set: ${CREATE_OUTPUT}" >&2; exit 1; }
   echo "Waiting for change set to be created..."
   # Wait for completion (success or failed)
@@ -436,7 +447,7 @@ fi
   --stack-name "${OIDC_STACK_NAME}" \
   --region "${REGION}" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-} 2>&1); then
+  --parameter-overrides GitHubOwner=${GH_OWNER} GitHubRepo=${GH_REPO} AgentArtifactsBucket=${AGENT_ARTIFACTS_BUCKET} AgentLockTable=${AGENT_LOCK_TABLE} AgentQueueUrl=${AGENT_QUEUE_URL} AgentQueueArn=${AGENT_QUEUE_ARN} ${OIDC_PROVIDER_PARAM:-} ${OIDC_ROLE_PARAM:-} ${SKIP_ROLE_PARAM:-} 2>&1); then
   echo "ERROR: CloudFormation deploy failed for ${OIDC_STACK_NAME}" >&2
   echo "--- aws deploy output ---" >&2
   echo "$DEPLOY_OIDC_OUTPUT" >&2
