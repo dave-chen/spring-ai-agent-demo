@@ -9,7 +9,7 @@ jobs:
   poll:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       issues: write
       actions: write
       id-token: write
