@@ -49,9 +49,6 @@ jobs:
           sudo apt-get install -y gh
 
       - name: Acquire Lock
-              - name: Install gh CLI
-                run: sudo apt-get update && sudo apt-get install -y gh
-
         env:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LOCK_KEY: ${{ github.event.client_payload.lock_key }}
