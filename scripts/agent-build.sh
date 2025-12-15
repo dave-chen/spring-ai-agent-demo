@@ -21,8 +21,12 @@ echo "Starting agent build for issue ${ISSUE_NUMBER} on ${REPO}"
 
 # Invoke the Bedrock AgentCore (or the placeholder script) to build the feature
 echo "Starting AgentCore invocation for issue ${ISSUE_NUMBER}"
-AGENT_OUTPUT=$(bash scripts/agent-core-invoke.sh ${ISSUE_NUMBER} ${REPO} "${AGENTCORE_RUNTIME_ID:-}" "${AGENTCORE_ROLE_ARN:-}" 2>&1)
-echo "AgentCore output:\n${AGENT_OUTPUT}"
+AGENT_OUTPUT=$(bash scripts/agent-core-invoke.sh ${ISSUE_NUMBER} ${REPO} "${AGENTCORE_RUNTIME_ID:-}" "${AGENTCORE_ROLE_ARN:-}" 2>&1) || {
+  echo "⚠️ AgentCore invocation failed, but continuing with artifacts"
+  AGENT_OUTPUT="AgentCore failed: $AGENT_OUTPUT"
+}
+echo "AgentCore output:"
+echo "${AGENT_OUTPUT}"
 
 # For now, simply commit the generated artifacts and open a PR with them
 BRANCH=agent-runtime/issue-${ISSUE_NUMBER}-$(date +%s)

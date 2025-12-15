@@ -120,20 +120,26 @@ Focus on Spring Boot Java applications. Be specific and complete in your impleme
   
   # Check if response was successful
   if [ "$HTTP_STATUS" -ne 200 ]; then
-    echo "Error: Claude API returned HTTP $HTTP_STATUS"
+    echo "⚠️  Error: Claude API returned HTTP $HTTP_STATUS"
     echo "Response: $RESPONSE_BODY"
     # Still try to extract error message
     ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.message // "Unknown error"' 2>/dev/null)
     echo "Error message: $ERROR_MSG"
-    exit 2
+    
+    # Save error to artifact file and continue
+    echo "Claude API Error (HTTP $HTTP_STATUS):" > "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+    echo "$ERROR_MSG" >> "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+    echo "" >> "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+    echo "Full Response:" >> "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+    echo "$RESPONSE_BODY" >> "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+  else
+    # Extract the response text
+    CLAUDE_TEXT=$(echo "$RESPONSE_BODY" | jq -r '.content[0].text // "Error: No response"')
+    echo "$CLAUDE_TEXT" > "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+    
+    echo "Claude response:"
+    echo "$CLAUDE_TEXT"
   fi
-  
-  # Extract the response text
-  CLAUDE_TEXT=$(echo "$RESPONSE_BODY" | jq -r '.content[0].text // "Error: No response"')
-  echo "$CLAUDE_TEXT" > "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
-  
-  echo "Claude response:"
-  echo "$CLAUDE_TEXT"
   
   if [ -n "${AGENT_ARTIFACTS_BUCKET:-}" ]; then
     if command -v aws >/dev/null 2>&1; then
