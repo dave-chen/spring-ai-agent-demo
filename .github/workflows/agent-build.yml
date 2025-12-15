@@ -62,8 +62,8 @@ jobs:
           AGENTCORE_RUNTIME_ID: ${{ secrets.AGENTCORE_RUNTIME_ID }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          # if AGENTCORE_RUNTIME_ID present, set USE_BEDROCK true
-          USE_BEDROCK: ${{ secrets.AGENTCORE_RUNTIME_ID != '' }}
+          # Only set USE_BEDROCK if AGENTCORE_RUNTIME_ID is actually present
+          USE_BEDROCK: ${{ secrets.AGENTCORE_RUNTIME_ID != '' && 'true' || '' }}
         run: |
           # Authenticate gh CLI for PR creation
           echo "Authenticating gh CLI"

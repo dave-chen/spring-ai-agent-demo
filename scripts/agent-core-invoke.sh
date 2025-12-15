@@ -51,20 +51,65 @@ if [ -n "${USE_BEDROCK:-}" ] && [ -n "${RUNTIME_ID}" ]; then
 fi
 
 if [ -n "${CLAUDE_API_KEY:-}" ] && [ -z "${USE_BEDROCK:-}" ]; then
-  echo "Invoking Claude API for a plan"
+  echo "Invoking Claude API to generate code changes for issue ${ISSUE}"
   if ! command -v curl >/dev/null 2>&1; then
     echo "curl not found; can't call Claude API" >&2
     exit 2
   fi
-  # simple payload for Claude
-  CLAUDE_PROMPT="Implement a build plan for issue ${ISSUE} in repo ${REPO}"
-  CLAUDE_ENDPOINT=${CLAUDE_API_URL:-https://api.anthropic.com/v1/complete}
+  
+  # Fetch issue details from GitHub
+  echo "Fetching issue details from GitHub..."
+  ISSUE_DATA=$(curl -s -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer ${GITHUB_TOKEN:-}" \
+    "https://api.github.com/repos/${REPO}/issues/${ISSUE}")
+  
+  ISSUE_TITLE=$(echo "$ISSUE_DATA" | jq -r '.title // "Unknown"')
+  ISSUE_BODY=$(echo "$ISSUE_DATA" | jq -r '.body // "No description"')
+  
+  echo "Issue #${ISSUE}: ${ISSUE_TITLE}"
+  
+  # Build Claude prompt
+  CLAUDE_PROMPT="You are a software developer working on the repository ${REPO}. 
+
+Issue #${ISSUE}: ${ISSUE_TITLE}
+
+Description:
+${ISSUE_BODY}
+
+Please generate the code changes needed to implement this feature. Provide:
+1. Complete, working code files (not just snippets)
+2. Clear explanations of what was changed
+3. Any test cases if applicable
+
+Focus on Spring Boot Java applications. Be specific and complete in your implementation."
+
+  # Use Claude Messages API (current format)
+  CLAUDE_ENDPOINT="https://api.anthropic.com/v1/messages"
+  
+  echo "Calling Claude API..."
   RESPONSE=$(curl -s -X POST "$CLAUDE_ENDPOINT" \
     -H "x-api-key: ${CLAUDE_API_KEY}" \
+    -H "anthropic-version: 2023-06-01" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"claude-2.1\", \"prompt\": \"${CLAUDE_PROMPT}\", \"max_tokens\": 1000}")
+    -d "$(jq -n --arg prompt "$CLAUDE_PROMPT" '{
+      model: "claude-3-5-sonnet-20241022",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: $prompt
+      }]
+    }')")
+  
   mkdir -p "$ARTIFACTS_DIR"
   echo "$RESPONSE" > "$ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  
+  # Extract the response text
+  CLAUDE_TEXT=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: No response"')
+  echo "$CLAUDE_TEXT" > "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
+  
+  echo "Claude response:"
+  echo "$CLAUDE_TEXT"
+  
   if [ -n "${AGENT_ARTIFACTS_BUCKET:-}" ]; then
     if command -v aws >/dev/null 2>&1; then
       echo "Uploading artifacts to s3://${AGENT_ARTIFACTS_BUCKET}/issues/${ISSUE}/"
@@ -73,7 +118,7 @@ if [ -n "${CLAUDE_API_KEY:-}" ] && [ -z "${USE_BEDROCK:-}" ]; then
       echo "Warning: AGENT_ARTIFACTS_BUCKET set but aws CLI not found; skipping upload"
     fi
   fi
-  echo "Claude response saved to $ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  echo "Claude agent invocation complete. Response saved to $ARTIFACTS_DIR/"
   exit 0
 fi
 
