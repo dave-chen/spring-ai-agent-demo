@@ -87,24 +87,49 @@ Focus on Spring Boot Java applications. Be specific and complete in your impleme
   CLAUDE_ENDPOINT="https://api.anthropic.com/v1/messages"
   
   echo "Calling Claude API..."
-  RESPONSE=$(curl -s -X POST "$CLAUDE_ENDPOINT" \
+  echo "Endpoint: $CLAUDE_ENDPOINT"
+  echo "Model: claude-3-5-sonnet-20241022"
+  
+  # Create the request payload
+  PAYLOAD=$(jq -n --arg prompt "$CLAUDE_PROMPT" '{
+    model: "claude-3-5-sonnet-20241022",
+    max_tokens: 4096,
+    messages: [{
+      role: "user",
+      content: $prompt
+    }]
+  }')
+  
+  echo "Request payload created. Sending to Claude API..."
+  
+  RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$CLAUDE_ENDPOINT" \
     -H "x-api-key: ${CLAUDE_API_KEY}" \
     -H "anthropic-version: 2023-06-01" \
     -H "Content-Type: application/json" \
-    -d "$(jq -n --arg prompt "$CLAUDE_PROMPT" '{
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 4096,
-      messages: [{
-        role: "user",
-        content: $prompt
-      }]
-    }')")
+    -d "$PAYLOAD")
+  
+  # Extract HTTP status code (last line)
+  HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+  # Get response body (everything except last line)
+  RESPONSE_BODY=$(echo "$RESPONSE" | head -n-1)
+  
+  echo "HTTP Status: $HTTP_STATUS"
   
   mkdir -p "$ARTIFACTS_DIR"
-  echo "$RESPONSE" > "$ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  echo "$RESPONSE_BODY" > "$ARTIFACTS_DIR/claude_output_issue_${ISSUE}.json"
+  
+  # Check if response was successful
+  if [ "$HTTP_STATUS" -ne 200 ]; then
+    echo "Error: Claude API returned HTTP $HTTP_STATUS"
+    echo "Response: $RESPONSE_BODY"
+    # Still try to extract error message
+    ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.message // "Unknown error"' 2>/dev/null)
+    echo "Error message: $ERROR_MSG"
+    exit 2
+  fi
   
   # Extract the response text
-  CLAUDE_TEXT=$(echo "$RESPONSE" | jq -r '.content[0].text // "Error: No response"')
+  CLAUDE_TEXT=$(echo "$RESPONSE_BODY" | jq -r '.content[0].text // "Error: No response"')
   echo "$CLAUDE_TEXT" > "$ARTIFACTS_DIR/claude_response_issue_${ISSUE}.txt"
   
   echo "Claude response:"
