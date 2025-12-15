@@ -88,11 +88,11 @@ Focus on Spring Boot Java applications. Be specific and complete in your impleme
   
   echo "Calling Claude API..."
   echo "Endpoint: $CLAUDE_ENDPOINT"
-  echo "Model: claude-3-5-sonnet-20241022"
+  echo "Model: claude-3-sonnet-20240229"
   
   # Create the request payload
   PAYLOAD=$(jq -n --arg prompt "$CLAUDE_PROMPT" '{
-    model: "claude-3-5-sonnet-20241022",
+    model: "claude-3-sonnet-20240229",
     max_tokens: 4096,
     messages: [{
       role: "user",
