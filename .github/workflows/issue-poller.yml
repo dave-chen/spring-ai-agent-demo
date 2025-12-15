@@ -17,15 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install deps
+      - name: Install Python deps
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
+          python3 -m pip install --upgrade pip
+          pip3 install requests
 
       - name: Run poller
         env:
@@ -34,4 +29,4 @@ jobs:
           AGENT_APPROVER_TEAMS: ${{ secrets.AGENT_APPROVER_TEAMS }} # comma separated org/team_slug pairs
           REPO: ${{ github.repository }}
         run: |
-          python scripts/issue-poller.py
+          python3 scripts/issue-poller.py

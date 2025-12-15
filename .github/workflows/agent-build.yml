@@ -18,21 +18,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install requests boto3
+          python3 -m pip install --upgrade pip
+          pip3 install requests boto3
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
@@ -40,21 +29,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Install aws cli & jq & gh
+      - name: Verify tools installed
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl unzip
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
-          sudo apt-get install -y gh
+          which java && java -version
+          which python3 && python3 --version
+          which aws && aws --version
+          which gh && gh --version
+          which jq && jq --version
 
       - name: Acquire Lock
         env:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
           LOCK_KEY: ${{ github.event.client_payload.lock_key }}
         run: |
-          python scripts/lock.py acquire --lock-key "${LOCK_KEY}" --ttl-minutes 30
+          python3 scripts/lock.py acquire --lock-key "${LOCK_KEY}" --ttl-minutes 30
 
       - name: Run agent build
         env:
@@ -77,4 +65,4 @@ jobs:
         env:
           LOCK_KEY: ${{ github.event.client_payload.lock_key }}
         run: |
-          python scripts/lock.py release --lock-key "${LOCK_KEY}"
+          python3 scripts/lock.py release --lock-key "${LOCK_KEY}"
