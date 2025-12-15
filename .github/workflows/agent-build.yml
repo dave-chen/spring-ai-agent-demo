@@ -61,6 +61,7 @@ jobs:
           AGENTCORE_ROLE_ARN: ${{ secrets.AGENTCORE_ROLE_ARN }}
           AGENTCORE_RUNTIME_ID: ${{ secrets.AGENTCORE_RUNTIME_ID }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL || 'claude-sonnet-4-5-20250929' }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           # Only set USE_BEDROCK if AGENTCORE_RUNTIME_ID is actually present
           USE_BEDROCK: ${{ secrets.AGENTCORE_RUNTIME_ID != '' && 'true' || '' }}

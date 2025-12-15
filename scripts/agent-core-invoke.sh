@@ -88,11 +88,14 @@ Focus on Spring Boot Java applications. Be specific and complete in your impleme
   
   echo "Calling Claude API..."
   echo "Endpoint: $CLAUDE_ENDPOINT"
-  echo "Model: claude-3-sonnet-20240229"
+  
+  # Use model from env var or default to claude-sonnet-4-5-20250929
+  CLAUDE_MODEL="${CLAUDE_MODEL:-claude-sonnet-4-5-20250929}"
+  echo "Model: $CLAUDE_MODEL"
   
   # Create the request payload
-  PAYLOAD=$(jq -n --arg prompt "$CLAUDE_PROMPT" '{
-    model: "claude-3-sonnet-20240229",
+  PAYLOAD=$(jq -n --arg model "$CLAUDE_MODEL" --arg prompt "$CLAUDE_PROMPT" '{
+    model: $model,
     max_tokens: 4096,
     messages: [{
       role: "user",
