@@ -28,6 +28,16 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
+        continue-on-error: true
+        id: oidc-creds
+
+      - name: Use local AWS credentials if OIDC fails
+        if: steps.oidc-creds.outcome == 'failure'
+        run: |
+          echo "ℹ️  OIDC auth failed (expected for self-hosted runners)"
+          echo "AWS_REGION=${{ secrets.AWS_REGION }}" >> $GITHUB_ENV
+          # Credentials from ~/.aws/credentials will be used automatically
+          echo "Using local ~/.aws/credentials for AWS access"
 
       - name: Verify tools installed
         run: |
