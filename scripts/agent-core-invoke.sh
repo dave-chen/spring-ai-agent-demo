@@ -109,9 +109,9 @@ Focus on Spring Boot Java applications. Be specific and complete in your impleme
     -d "$PAYLOAD")
   
   # Extract HTTP status code (last line)
-  HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-  # Get response body (everything except last line)
-  RESPONSE_BODY=$(echo "$RESPONSE" | head -n-1)
+  HTTP_STATUS=$(echo "$RESPONSE" | tail -1)
+  # Get response body (everything except last line) using sed
+  RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
   
   echo "HTTP Status: $HTTP_STATUS"
   
