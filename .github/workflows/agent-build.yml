@@ -2,7 +2,7 @@ name: Agent Build
 
 on:
   repository_dispatch:
-    types: [agent-build]
+    types: [agent-build, agent-feedback]
 
 jobs:
   agent-build:
@@ -57,6 +57,8 @@ jobs:
       - name: Run agent build
         env:
           ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+          FEEDBACK: ${{ github.event.client_payload.feedback }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENTCORE_ROLE_ARN: ${{ secrets.AGENTCORE_ROLE_ARN }}
           AGENTCORE_RUNTIME_ID: ${{ secrets.AGENTCORE_RUNTIME_ID }}

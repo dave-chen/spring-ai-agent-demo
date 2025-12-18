@@ -83,6 +83,17 @@ Please generate the code changes needed to implement this feature. Provide:
 
 Focus on Spring Boot Java applications. Be specific and complete in your implementation."
 
+  # Add feedback if this is a refinement request
+  if [ -n "${FEEDBACK:-}" ]; then
+    CLAUDE_PROMPT="${CLAUDE_PROMPT}
+
+---
+REVIEWER FEEDBACK:
+${FEEDBACK}
+
+Please review your previous implementation and revise it based on this feedback."
+  fi
+
   # Use Claude Messages API (current format)
   CLAUDE_ENDPOINT="https://api.anthropic.com/v1/messages"
   
