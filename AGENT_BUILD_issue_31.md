@@ -36,11 +36,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Controller for health check endpoints.
+ * Controller for handling health check requests.
  * This endpoint is designed for load balancers and monitoring systems.
  */
 @RestController
-@RequestMapping("/api/health")
+@RequestMapping("/api")
 @Tag(name = "Health", description = "Health check endpoints")
 public class HealthController {
 
@@ -51,28 +51,29 @@ public class HealthController {
     }
 
     /**
-     * Health check endpoint for monitoring and load balancing.
-     * Returns application status without requiring authentication or database access.
+     * Health check endpoint that returns the current status of the application.
+     * This endpoint does not require authentication and does not access the database.
      *
-     * @return HealthResponse containing status, timestamp, version, and environment
+     * @return ResponseEntity containing health status information
      */
-    @GetMapping
+    @GetMapping("/health")
     @Operation(
-            summary = "Check application health",
-            description = "Returns application health status for monitoring systems and load balancers. " +
-                    "Does not require authentication and provides fast response without database access."
+        summary = "Get application health status",
+        description = "Returns the current health status of the application. " +
+                     "This endpoint is designed for load balancers and monitoring systems. " +
+                     "No authentication required."
     )
     @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Application is healthy",
-                    content = @Content(
-                            mediaType = "application/json",
-                            schema = @Schema(implementation = HealthResponse.class)
-                    )
+        @ApiResponse(
+            responseCode = "200",
+            description = "Application is healthy",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = HealthResponse.class)
             )
+        )
     })
-    public ResponseEntity<HealthResponse> checkHealth() {
+    public ResponseEntity<HealthResponse> health() {
         HealthResponse healthResponse = healthService.getHealthStatus();
         return ResponseEntity.ok(healthResponse);
     }
@@ -87,33 +88,40 @@ public class HealthController {
 package com.davechen.springaiagentdemo.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.util.Objects;
 
 /**
- * Data Transfer Object for health check response.
+ * Data Transfer Object for health check responses.
  */
 @Schema(description = "Health check response containing application status information")
 public class HealthResponse {
 
-    @Schema(description = "Application health status", example = "UP")
+    @Schema(description = "Current health status of the application", example = "UP")
+    @JsonProperty("status")
     private String status;
 
-    @Schema(description = "Timestamp when health check was performed", example = "2025-12-17T10:30:45Z")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
-    private Instant timestamp;
+    @Schema(description = "Timestamp when the health check was performed", example = "2025-12-17T10:30:45Z")
+    @JsonProperty("timestamp")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
+    private ZonedDateTime timestamp;
 
     @Schema(description = "Application version", example = "1.0.0")
+    @JsonProperty("version")
     private String version;
 
-    @Schema(description = "Deployment environment", example = "production")
+    @Schema(description = "Current environment", example = "production")
+    @JsonProperty("environment")
     private String environment;
 
+    // Constructors
     public HealthResponse() {
     }
 
-    public HealthResponse(String status, Instant timestamp, String version, String environment) {
+    public HealthResponse(String status, ZonedDateTime timestamp, String version, String environment) {
         this.status = status;
         this.timestamp = timestamp;
         this.version = version;
@@ -121,7 +129,6 @@ public class HealthResponse {
     }
 
     // Getters and Setters
-
     public String getStatus() {
         return status;
     }
@@ -130,11 +137,11 @@ public class HealthResponse {
         this.status = status;
     }
 
-    public Instant getTimestamp() {
+    public ZonedDateTime getTimestamp() {
         return timestamp;
     }
 
-    public void setTimestamp(Instant timestamp) {
+    public void setTimestamp(ZonedDateTime timestamp) {
         this.timestamp = timestamp;
     }
 
@@ -155,13 +162,29 @@ public class HealthResponse {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        HealthResponse that = (HealthResponse) o;
+        return Objects.equals(status, that.status) &&
+               Objects.equals(timestamp, that.timestamp) &&
+               Objects.equals(version, that.version) &&
+               Objects.equals(environment, that.environment);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(status, timestamp, version, environment);
+    }
+
+    @Override
     public String toString() {
         return "HealthResponse{" +
-                "status='" + status + '\'' +
-                ", timestamp=" + timestamp +
-                ", version='" + version + '\'' +
-                ", environment='" + environment + '\'' +
-                '}';
+               "status='" + status + '\'' +
+               ", timestamp=" + timestamp +
+               ", version='" + version + '\'' +
+               ", environment='" + environment + '\'' +
+               '}';
     }
 }
 ```
@@ -177,11 +200,13 @@ import com.davechen.springaiagentdemo.dto.HealthResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 /**
  * Service for handling health check logic.
- * This service provides fast health status without database access.
+ * This service provides health status information without database access
+ * to ensure fast response times.
  */
 @Service
 public class HealthService {
@@ -190,20 +215,20 @@ public class HealthService {
     private String applicationVersion;
 
     @Value("${app.environment:development}")
-    private String environment;
+    private String applicationEnvironment;
 
     /**
-     * Generates health status response.
-     * This method is designed to be fast (< 100ms) and does not access the database.
+     * Retrieves the current health status of the application.
+     * This method is designed to be fast and does not perform any database operations.
      *
-     * @return HealthResponse with current application status
+     * @return HealthResponse containing current status information
      */
     public HealthResponse getHealthStatus() {
         return new HealthResponse(
-                "UP",
-                Instant.now(),
-                applicationVersion,
-                environment
+            "UP",
+            ZonedDateTime.now(ZoneId.of("UTC")),
+            applicationVersion,
+            applicationEnvironment
         );
     }
 }
@@ -220,7 +245,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -233,15 +258,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth
-                        // Public endpoints - no authentication required
-                        .requestMatchers("/api/health").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        // All other endpoints require authentication
-                        .anyRequest().authenticated()
-                );
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+                // Allow health check endpoint without authentication
+                .requestMatchers("/api/health").permitAll()
+                // Allow actuator endpoints (if using Spring Boot Actuator)
+                .requestMatchers("/actuator/**").permitAll()
+                // Allow Swagger UI (if using OpenAPI/Swagger)
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // All other requests require authentication
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(session -> 
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            );
 
         return http.build();
     }
@@ -264,9 +294,11 @@ spring:
 # Server configuration
 server:
   port: 8080
-  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json
 
-# Logging
+# Logging configuration
 logging:
   level:
     com.davechen.springaiagentdemo: INFO
@@ -276,15 +308,17 @@ logging:
 **Alternative: `src/main/resources/application.properties`**
 
 ```properties
-# Application Information
+# Application metadata
 app.version=1.0.0
 app.environment=${APP_ENVIRONMENT:development}
 
+# Spring application name
 spring.application.name=spring-ai-agent-demo
 
-# Server Configuration
+# Server configuration
 server.port=8080
-server.shutdown=graceful
+server.compression.enabled=true
+server.compression.mime-types=application/json
 
 # Logging
 logging.level.com.davechen.springaiagentdemo=INFO
@@ -303,8 +337,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.time.Instant;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -318,54 +350,39 @@ class HealthServiceTest {
     void setUp() {
         healthService = new HealthService();
         ReflectionTestUtils.setField(healthService, "applicationVersion", "1.0.0");
-        ReflectionTestUtils.setField(healthService, "environment", "test");
+        ReflectionTestUtils.setField(healthService, "applicationEnvironment", "test");
     }
 
     @Test
-    void testGetHealthStatus_ReturnsCorrectStatus() {
+    void testGetHealthStatus_ReturnsValidResponse() {
         // When
         HealthResponse response = healthService.getHealthStatus();
 
         // Then
         assertNotNull(response);
         assertEquals("UP", response.getStatus());
-    }
-
-    @Test
-    void testGetHealthStatus_ReturnsCurrentTimestamp() {
-        // Given
-        Instant before = Instant.now();
-
-        // When
-        HealthResponse response = healthService.getHealthStatus();
-
-        // Then
-        Instant after = Instant.now();
-        assertNotNull(response.getTimestamp());
-        assertTrue(response.getTimestamp().isAfter(before.minusSeconds(1)));
-        assertTrue(response.getTimestamp().isBefore(after.plusSeconds(1)));
-    }
-
-    @Test
-    void testGetHealthStatus_ReturnsCorrectVersion() {
-        // When
-        HealthResponse response = healthService.getHealthStatus();
-
-        // Then
         assertEquals("1.0.0", response.getVersion());
+        assertEquals("test", response.getEnvironment());
+        assertNotNull(response.getTimestamp());
     }
 
     @Test
-    void testGetHealthStatus_ReturnsCorrectEnvironment() {
+    void testGetHealthStatus_TimestampIsRecent() {
         // When
         HealthResponse response = healthService.getHealthStatus();
 
         // Then
-        assertEquals("test", response.getEnvironment());
+        assertNotNull(response.getTimestamp());
+        // Verify timestamp is within the last second
+        long secondsDifference = java.time.Duration.between(
+            response.getTimestamp(),
+            java.time.ZonedDateTime.now(java.time.ZoneId.of("UTC"))
+        ).getSeconds();
+        assertTrue(secondsDifference < 2, "Timestamp should be recent");
     }
 
     @Test
-    void testGetHealthStatus_PerformanceUnder100ms() {
+    void testGetHealthStatus_PerformanceRequirement() {
         // Given
         long startTime = System.currentTimeMillis();
 
@@ -373,107 +390,12 @@ class HealthServiceTest {
         HealthResponse response = healthService.getHealthStatus();
 
         // Then
-        long endTime = System.currentTimeMillis();
-        long duration = endTime - startTime;
-        assertTrue(duration < 100, "Health check should complete in under 100ms, took: " + duration + "ms");
+        long duration = System.currentTimeMillis() - startTime;
+        assertTrue(duration < 100, "Response time should be less than 100ms, was: " + duration + "ms");
         assertNotNull(response);
     }
 }
 ```
-
-## 7. Integration Tests
-
-**File: `src/test/java/com/davechen/springaiagentdemo/controller/HealthControllerIntegrationTest.java`**
-
-```java
-package com.davechen.springaiagentdemo.controller;
-
-import com.davechen.springaiagentdemo.dto.HealthResponse;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-/**
- * Integration tests for HealthController.
- */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class HealthControllerIntegrationTest {
-
-    @LocalServerPort
-    private int port;
-
-    @Autowired
-    private TestRestTemplate restTemplate;
-
-    @Test
-    void testHealthEndpoint_ReturnsOk() {
-        // When
-        ResponseEntity<HealthResponse> response = restTemplate.getForEntity(
-                "http://localhost:" + port + "/api/health",
-                HealthResponse.class
-        );
-
-        // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-    }
-
-    @Test
-    void testHealthEndpoint_ReturnsCorrectData() {
-        // When
-        ResponseEntity<HealthResponse> response = restTemplate.getForEntity(
-                "http://localhost:" + port + "/api/health",
-                HealthResponse.class
-        );
-
-        // Then
-        HealthResponse body = response.getBody();
-        assertNotNull(body);
-        assertEquals("UP", body.getStatus());
-        assertNotNull(body.getTimestamp());
-        assertNotNull(body.getVersion());
-        assertNotNull(body.getEnvironment());
-    }
-
-    @Test
-    void testHealthEndpoint_NoAuthenticationRequired() {
-        // When - calling without any authentication headers
-        ResponseEntity<HealthResponse> response = restTemplate.getForEntity(
-                "http://localhost:" + port + "/api/health",
-                HealthResponse.class
-        );
-
-        // Then - should still succeed
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-    }
-
-    @Test
-    void testHealthEndpoint_ResponseTime() {
-        // Given
-        long startTime = System.currentTimeMillis();
-
-        // When
-        ResponseEntity<HealthResponse> response = restTemplate.getForEntity(
-                "http://localhost:" + port + "/api/health",
-                HealthResponse.class
-        );
-
-        // Then
-        long endTime = System.currentTimeMillis();
-        long duration = endTime - startTime;
-        assertTrue(duration < 100, "Health endpoint should respond in under 100ms, took: " + duration + "ms");
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-    }
-}
-```
-
-## 8. Controller Unit Tests with MockMvc
 
 **File: `src/test/java/com/davechen/springaiagentdemo/controller/HealthControllerTest.java`**
 
@@ -489,14 +411,15 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Unit tests for HealthController using MockMvc.
+ * Integration tests for HealthController.
  */
 @WebMvcTest(HealthController.class)
 class HealthControllerTest {
@@ -508,20 +431,74 @@ class HealthControllerTest {
     private HealthService healthService;
 
     @Test
-    void testCheckHealth_ReturnsOk() throws Exception {
+    void testHealthEndpoint_ReturnsOk() throws Exception {
         // Given
-        HealthResponse mockResponse = new HealthResponse(
-                "UP",
-                Instant.parse("2025-12-17T10:30:45Z"),
-                "1.0.0",
-                "production"
+        ZonedDateTime timestamp = ZonedDateTime.of(2025, 12, 17, 10, 30, 45, 0, ZoneId.of("UTC"));
+        HealthResponse healthResponse = new HealthResponse(
+            "UP",
+            timestamp,
+            "1.0.0",
+            "production"
         );
-        when(healthService.getHealthStatus()).thenReturn(mockResponse);
+        when(healthService.getHealthStatus()).thenReturn(healthResponse);
+
+        // When & Then
+        mockMvc.perform(get("/api/health")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.version").value("1.0.0"))
+                .andExpect(jsonPath("$.environment").value("production"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
+    void testHealthEndpoint_ResponseStructure() throws Exception {
+        // Given
+        HealthResponse healthResponse = new HealthResponse(
+            "UP",
+            ZonedDateTime.now(ZoneId.of("UTC")),
+            "1.0.0",
+            "test"
+        );
+        when(healthService.getHealthStatus()).thenReturn(healthResponse);
 
         // When & Then
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.status").value("UP"))
-                .
+                .andExpect(jsonPath("$.status").exists())
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.version").exists())
+                .andExpect(jsonPath("$.environment").exists());
+    }
+
+    @Test
+    void testHealthEndpoint_DoesNotRequireAuthentication() throws Exception {
+        // Given
+        HealthResponse healthResponse = new HealthResponse(
+            "UP",
+            ZonedDateTime.now(ZoneId.of("UTC")),
+            "1.0.0",
+            "test"
+        );
+        when(healthService.getHealthStatus()).thenReturn(healthResponse);
+
+        // When & Then - Should succeed without authentication headers
+        mockMvc.perform(get("/api/health"))
+                .andExpect(status().isOk());
+    }
+}
+```
+
+## 7. Integration Test
+
+**File: `src/test/java/com/davechen/springaiagentdemo/integration/HealthEndpointIntegrationTest.java`**
+
+```java
+package com.davechen.springaiagentdemo.integration;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework
 Claude agent invocation complete. Response saved to build/agent-artifacts/issue_31/
